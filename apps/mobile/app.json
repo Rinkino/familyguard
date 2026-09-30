@@ -33,13 +33,28 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#EEF2F0",
-          "dark": { "backgroundColor": "#0E1714" }
+          "dark": {
+            "backgroundColor": "#0E1714"
+          }
         }
       ],
       "expo-secure-store",
       "expo-web-browser",
       "expo-font",
       "@react-native-google-signin/google-signin"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a1095a61-6c9c-4c12-a4ba-3a3412c81122"
+      }
+    },
+    "owner": "kenyo",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a1095a61-6c9c-4c12-a4ba-3a3412c81122"
+    }
   }
 }
