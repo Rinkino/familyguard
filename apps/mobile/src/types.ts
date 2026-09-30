@@ -25,6 +25,15 @@ export type Person = {
   status: 'connected' | 'pending' | 'incoming';
   coord?: LatLng;
   locationAt?: number;
+  /** Parent/child agreement with this person, if any. */
+  guardianship?: Guardianship;
+};
+
+export type Guardianship = {
+  /** true: I'm their guardian. false: they're my guardian. */
+  iAmGuardian: boolean;
+  status: 'proposed' | 'active' | 'release_requested';
+  proposedByMe: boolean;
 };
 
 export type Circle = {
@@ -72,4 +81,6 @@ export type ZoneAlert = {
   sosAt?: number;
   resolvedHow?: 'back-inside' | 'said-ok' | 'marked-safe';
   coord?: LatLng;
+  /** Name given to this SOS in the recordings library. */
+  title?: string;
 };

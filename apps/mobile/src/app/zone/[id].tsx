@@ -8,7 +8,7 @@ import type { FamilyMapHandle } from '@/components/map/types';
 import { Button, Field, Screen, Section, Row, T, TopBar, attempt, confirm } from '@/components/ui';
 import { formatDistance, type LatLng } from '@/lib/geo';
 import type { Who } from '@/types';
-import { firstName, formatRemaining, useNow, useStore, whoName, zoneTargets } from '@/state/store';
+import { firstName, formatRemaining, iGuard, useNow, useStore, whoName, zoneTargets } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 const HOUR = 3_600_000;
@@ -52,8 +52,9 @@ export default function ZoneScreen() {
     map.current?.flyTo(center, radiusM * 2.8);
   }, [center, radiusM]);
 
-  // A zone someone else set for you: you can see it, not change it.
-  if (existing && existing.setById !== 'me') {
+  // Zones set by someone else are read-only, unless you're a guardian of the person inside.
+  const canEdit = !existing || existing.setById === 'me' || iGuard(store.people.find((p) => p.id === existing.forId));
+  if (existing && !canEdit) {
     const setter = whoName(store.people, existing.setById);
     return (
       <Screen>

@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Row, Screen, Section, T } from '@/components/ui';
 import { distanceMeters, formatDistance } from '@/lib/geo';
-import { effectiveShare, firstName, formatAgo, useStore } from '@/state/store';
+import { effectiveShare, firstName, formatAgo, guardsMe, iGuard, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function People() {
@@ -15,6 +15,11 @@ export default function People() {
   const incoming = store.people.filter((p) => p.status === 'incoming');
   const seeMe = connected.filter((p) => effectiveShare(store, p)).length;
   const iSee = connected.filter((p) => p.theyShare).length;
+  const toReview = connected.filter(
+    (p) =>
+      (p.guardianship?.status === 'proposed' && !p.guardianship.proposedByMe) ||
+      (p.guardianship?.status === 'release_requested' && p.guardianship.iAmGuardian)
+  );
 
   return (
     <Screen>
@@ -66,6 +71,27 @@ export default function People() {
         </Section>
       )}
 
+      {toReview.length > 0 && (
+        <Section title="Agreements to review">
+          {toReview.map((p, i) => (
+            <Row key={p.id} last={i === toReview.length - 1} onPress={() => router.push(`/guardian/${p.id}`)}>
+              <Avatar name={p.name} tint={p.tint} />
+              <View style={{ flex: 1 }}>
+                <T v="bodyStrong">{p.name}</T>
+                <T v="small" color={c.muted}>
+                  {p.guardianship?.status === 'release_requested'
+                    ? 'Asked to be released from your agreement'
+                    : p.guardianship?.iAmGuardian
+                      ? 'Asked you to be their guardian'
+                      : 'Wants to be your guardian'}
+                </T>
+              </View>
+              <T v="smallStrong" color={c.beacon}>Review</T>
+            </Row>
+          ))}
+        </Section>
+      )}
+
       {pending.length > 0 && (
         <Section title="Waiting to accept">
           {pending.map((p, i) => (
@@ -91,7 +117,10 @@ export default function People() {
                 <Avatar name={p.name} tint={p.tint} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T v="bodyStrong" numberOfLines={1}>
-                    {firstName(p.name)} <T v="body" color={c.muted}>({p.label})</T>
+                    {firstName(p.name)}{' '}
+                    <T v="body" color={c.muted}>
+                      ({p.label}{iGuard(p) ? ', you guard' : guardsMe(p) ? ', your guardian' : ''})
+                    </T>
                   </T>
                   <T v="small" color={p.theyShare ? c.ink : c.muted} numberOfLines={1}>
                     {!p.theyShare

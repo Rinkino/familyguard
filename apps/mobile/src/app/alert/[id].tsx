@@ -113,7 +113,7 @@ export default function AlertDetail() {
       {alert.sosAt && (
         <View style={{ marginTop: space.lg, gap: space.sm }}>
           <T v="heading">Audio from {name}'s phone</T>
-          <SosClips alertId={alert.id} />
+          <SosClips alertId={alert.id} name={alert.title ?? `${name} SOS`} live={open} />
         </View>
       )}
 

@@ -53,7 +53,7 @@ async function loadData(userId: string, email: string): Promise<Data> {
   const db = supabase!;
   const toWho = (id: string): Who => (id === userId ? 'me' : id);
 
-  const [profile, templates, people, circles, members, zones, alerts] = await Promise.all([
+  const [profile, templates, people, circles, members, zones, alerts, guardianships] = await Promise.all([
     db.from('profiles').select('display_name, tint, invite_code, sharing_paused').eq('id', userId).single(),
     db.from('relationship_templates').select('id, owner_id, name, share_by_default').order('created_at'),
     db.rpc('my_people'),
@@ -65,7 +65,15 @@ async function loadData(userId: string, email: string): Promise<Data> {
       .select('*')
       .or(`stage.neq.resolved,resolved_at.gt.${new Date(Date.now() - 6 * 3600_000).toISOString()}`)
       .order('left_at', { ascending: false }),
+    db.from('guardianships').select('guardian_id, dependent_id, status, proposed_by'),
   ]);
+  const agreements = need(guardianships) ?? [];
+  const agreementWith = (otherId: string): Person['guardianship'] => {
+    const g = agreements.find(
+      (a) => (a.guardian_id === userId && a.dependent_id === otherId) || (a.dependent_id === userId && a.guardian_id === otherId)
+    );
+    return g ? { iAmGuardian: g.guardian_id === userId, status: g.status, proposedByMe: g.proposed_by === userId } : undefined;
+  };
 
   const p = need(profile);
   if (!p) throw new Error('Profile missing. Has the database migration been run?');
@@ -94,6 +102,7 @@ async function loadData(userId: string, email: string): Promise<Data> {
         status: r.status as Person['status'],
         coord: r.lat != null ? { latitude: r.lat, longitude: r.lng } : undefined,
         locationAt: r.location_at ? Date.parse(r.location_at) : undefined,
+        guardianship: agreementWith(r.id),
       }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     circles: (need(circles) ?? []).map((c) => ({
@@ -128,6 +137,7 @@ async function loadData(userId: string, email: string): Promise<Data> {
       sosAt: a.sos_at ? Date.parse(a.sos_at) : undefined,
       resolvedHow: a.resolved_how ?? undefined,
       coord: a.lat != null ? { latitude: a.lat, longitude: a.lng } : undefined,
+      title: a.title ?? undefined,
     })),
   };
 }
@@ -216,6 +226,28 @@ function useActions(data: Data, loc: LocationState, reload: () => Promise<void>,
     },
     endZone: (id: string) => run(db.from('zones').update({ active: false }).eq('id', id)),
 
+    proposeGuardianship: (otherId: string, asGuardian: boolean) =>
+      run(db.rpc('propose_guardianship', { other: otherId, as_guardian: asGuardian })),
+    respondGuardianship: (person: Person, accept: boolean) => {
+      const mine = person.guardianship?.iAmGuardian;
+      return run(
+        db.rpc('respond_guardianship', { g: mine ? myId : person.id, d: mine ? person.id : myId, accept })
+      );
+    },
+    requestRelease: (guardianId: string) => run(db.rpc('request_release', { g: guardianId })),
+    endGuardianship: (dependentId: string, release: boolean) =>
+      run(db.rpc('end_guardianship', { d: dependentId, release })),
+
+    renameAlert: (alertId: string, title: string) => run(db.rpc('rename_alert', { alert: alertId, new_title: title })),
+    deleteRecordings: async (alertId: string) => {
+      const rows = need(await db.from('sos_recordings').select('path').eq('alert_id', alertId)) ?? [];
+      if (rows.length) {
+        const { error } = await db.storage.from('sos-recordings').remove(rows.map((r) => r.path));
+        if (error) throw new Error(error.message);
+      }
+      return run(db.rpc('delete_recordings', { alert: alertId }));
+    },
+
     answerOk: (alertId: string) => run(db.rpc('answer_ok', { alert: alertId })),
     markSafe: (alertId: string) => run(db.rpc('mark_safe', { alert: alertId })),
     sosNow: (alertId: string | null) =>
@@ -274,6 +306,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, soon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, soon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'zones' }, soon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guardianships' }, soon)
       .subscribe();
     const interval = setInterval(reload, REFRESH_EVERY_MS);
     const sub = AppState.addEventListener('change', (s) => s === 'active' && reload());
@@ -381,9 +414,12 @@ export function whoName(people: Person[], who: Who, you = 'You'): string {
   return p ? firstName(p.name) : 'Someone';
 }
 
-/** Zones can be set for yourself or anyone who shares their location with you. */
+/**
+ * People you can set zones for: anyone sharing with you, except your own
+ * guardians. (The server also blocks zones for someone else's dependent.)
+ */
 export function zoneTargets(people: Person[]): Person[] {
-  return people.filter((p) => p.status === 'connected' && p.theyShare);
+  return people.filter((p) => p.status === 'connected' && p.theyShare && !guardsMe(p));
 }
 
 export function activeAlerts(alerts: ZoneAlert[]) {
@@ -415,4 +451,19 @@ export function formatAgo(ms: number): string {
   if (m < 60) return `${m} min ago`;
   const h = Math.round(m / 60);
   return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
+}
+
+/** People who are my guardians (active or asked to release). */
+export function myGuardians(people: Person[]): Person[] {
+  return people.filter((p) => p.guardianship && !p.guardianship.iAmGuardian && p.guardianship.status !== 'proposed');
+}
+
+/** True when I'm this person's guardian under an active agreement. */
+export function iGuard(person: Person | undefined): boolean {
+  return Boolean(person?.guardianship?.iAmGuardian && person.guardianship.status !== 'proposed');
+}
+
+/** True when this person is my guardian under an active agreement. */
+export function guardsMe(person: Person | undefined): boolean {
+  return Boolean(person?.guardianship && !person.guardianship.iAmGuardian && person.guardianship.status !== 'proposed');
 }

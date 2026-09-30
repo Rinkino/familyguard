@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, confirm, attempt } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { useStore } from '@/state/store';
+import { myGuardians, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function You() {
@@ -19,11 +19,28 @@ export default function You() {
         <T v="body" color={c.muted}>{store.me.email}</T>
       </View>
 
-      <Section note="While paused, nobody can see your location. Your settings are kept for when you resume.">
+      <Section
+        note={
+          myGuardians(store.people).length > 0
+            ? 'While paused, only your guardians can see your location.'
+            : 'While paused, nobody can see your location. Your settings are kept for when you resume.'
+        }
+      >
         <Row last>
           <Icon name="pause-circle" color={store.pausedAll ? c.flare : c.muted} />
           <T v="bodyStrong" style={{ flex: 1 }}>Pause sharing with everyone</T>
           <Toggle value={store.pausedAll} onChange={(v) => attempt(store.actions.setPausedAll(v))} />
+        </Row>
+      </Section>
+
+      <Section title="Safety">
+        <Row last onPress={() => router.push('/recordings')}>
+          <Icon name="mic" />
+          <View style={{ flex: 1 }}>
+            <T v="bodyStrong">Recordings</T>
+            <T v="small" color={c.muted}>Audio from SOS alerts. Play, name, save or delete.</T>
+          </View>
+          <Icon name="chevron-right" />
         </Row>
       </Section>
 

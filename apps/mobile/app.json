@@ -53,7 +53,8 @@
         {
           "locationWhenInUsePermission": "FamilyGuard shares your location with the people you choose and checks your zones."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "router": {},

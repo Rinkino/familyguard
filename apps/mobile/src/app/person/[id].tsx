@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, TopBar, confirm, attempt } from '@/components/ui';
 import { distanceMeters, formatDistance } from '@/lib/geo';
-import { effectiveShare, firstName, formatAgo, sharingCircles, useStore } from '@/state/store';
+import { effectiveShare, firstName, formatAgo, guardsMe, iGuard, sharingCircles, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function PersonDetail() {
@@ -25,6 +25,20 @@ export default function PersonDetail() {
   const viaCircles = sharingCircles(store.circles, person.id);
   const iShareNow = effectiveShare(store, person);
   const pending = person.status === 'pending';
+  const theyGuardMe = guardsMe(person);
+  const iGuardThem = iGuard(person);
+  const g = person.guardianship;
+  const agreementText = !g
+    ? 'None. You each choose what to share.'
+    : g.status === 'proposed'
+      ? g.proposedByMe
+        ? `Waiting for ${name} to accept`
+        : `${name} sent an agreement for you to review`
+      : g.iAmGuardian
+        ? g.status === 'release_requested'
+          ? `${name} asked to be released`
+          : `You're ${name}'s guardian`
+        : `${name} is your guardian`;
 
   const remove = () =>
     confirm(
@@ -46,6 +60,11 @@ export default function PersonDetail() {
         </View>
         <T v="title" style={{ marginTop: space.lg, textAlign: 'center' }}>{person.name}</T>
         <T v="body" color={c.muted}>You call them {person.label}</T>
+        {(theyGuardMe || iGuardThem) && (
+          <View style={{ marginTop: space.sm, paddingHorizontal: space.md, paddingVertical: 4, borderRadius: 12, backgroundColor: c.beaconSoft }}>
+            <T v="smallStrong" color={c.beacon}>{iGuardThem ? `You're ${name}'s guardian` : `${name} is your guardian`}</T>
+          </View>
+        )}
       </View>
 
       {pending ? (
@@ -60,7 +79,9 @@ export default function PersonDetail() {
           <Row>
             <View style={{ flex: 1 }}>
               <T v="bodyStrong">Share your location with {name}</T>
-              {store.pausedAll ? (
+              {theyGuardMe ? (
+                <T v="small" color={c.muted}>Always on, because {name} is your guardian.</T>
+              ) : store.pausedAll ? (
                 <T v="small" color={c.flare}>Paused for everyone from the You tab.</T>
               ) : !person.iShare && viaCircles.length > 0 ? (
                 <T v="small" color={c.muted}>
@@ -68,7 +89,11 @@ export default function PersonDetail() {
                 </T>
               ) : null}
             </View>
-            <Toggle value={person.iShare} onChange={(v) => attempt(store.actions.setShare(person.id, v))} />
+            <Toggle
+              value={theyGuardMe || person.iShare}
+              disabled={theyGuardMe}
+              onChange={(v) => attempt(store.actions.setShare(person.id, v))}
+            />
           </Row>
           <Row last>
             <View style={{ flex: 1 }}>
@@ -82,6 +107,15 @@ export default function PersonDetail() {
               </T>
             </View>
             <Icon name={person.theyShare ? 'eye' : 'eye-off'} color={person.theyShare ? c.beacon : c.moss} />
+          </Row>
+        </Section>
+      )}
+
+      {!pending && (
+        <Section title="Parent and child agreement">
+          <Row last onPress={() => router.push(`/guardian/${person.id}`)}>
+            <T v="body" style={{ flex: 1 }}>{agreementText}</T>
+            <T v="smallStrong" color={c.beacon}>{g ? 'View' : 'Set up'}</T>
           </Row>
         </Section>
       )}
@@ -121,7 +155,13 @@ export default function PersonDetail() {
       )}
 
       <View style={{ marginTop: space.xl }}>
-        <Button kind="danger" label={pending ? 'Cancel request' : `Remove ${name}`} onPress={remove} />
+        {theyGuardMe ? (
+          <T v="small" color={c.muted} style={{ textAlign: 'center' }}>
+            To remove {name}, ask to be released from the agreement first.
+          </T>
+        ) : (
+          <Button kind="danger" label={pending ? 'Cancel request' : `Remove ${name}`} onPress={remove} />
+        )}
       </View>
     </Screen>
   );
