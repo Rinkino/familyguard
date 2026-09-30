@@ -27,7 +27,16 @@ const AuthContext = createContext<Auth | null>(null);
 async function sessionFromUrl(url: string) {
   if (!supabase) return;
   const { params, errorCode } = QueryParams.getQueryParams(url);
-  if (errorCode || params.error_description) throw new Error(params.error_description ?? errorCode ?? 'Sign-in failed');
+  if (errorCode || params.error_description) {
+    // Supabase puts the detail in the URL, still percent-encoded.
+    const detail = decodeURIComponent((params.error_description ?? errorCode ?? '').replace(/\+/g, ' '));
+    console.warn('Sign-in failed:', detail);
+    throw new Error(
+      /exchange external code/i.test(detail)
+        ? "Google sign-in isn't set up correctly yet. Try email instead."
+        : detail || 'Sign-in failed. Try again.'
+    );
+  }
   const { access_token, refresh_token } = params;
   if (!access_token || !refresh_token) return;
   const { error } = await supabase.auth.setSession({ access_token, refresh_token });
