@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
-import type { ZoneAlert } from '@/mock/data';
+import type { ZoneAlert } from '@/types';
 import { formatRemaining, useNow, useStore, whoName } from '@/state/store';
 import { space, useColors } from '@/theme';
 import { T } from './ui';
@@ -11,20 +11,20 @@ export function AlertBanner({ alert }: { alert: ZoneAlert }) {
   const c = useColors();
   const store = useStore();
   const now = useNow();
-  const zone = store.zones.find((z) => z.id === alert.zoneId);
+  const zoneName = alert.zoneName ?? 'the zone';
   const name = whoName(store.people, alert.forId);
   const left = alert.stageEndsAt ? formatRemaining(alert.stageEndsAt - now) : '';
   const self = alert.forId === 'me';
 
   const text = self
     ? {
-        left: `You left ${zone?.name}. We'll check in with you in ${left}.`,
+        left: `You left ${zoneName}. We'll check in with you in ${left}.`,
         checking: `Are you OK? Answer in ${left}.`,
         sos: 'SOS sent. Tap when you are safe.',
         resolved: '',
       }[alert.stage]
     : {
-        left: `${name} left ${zone?.name}. Checking in with ${name} in ${left}.`,
+        left: `${name} left ${zoneName}. Checking in with ${name} in ${left}.`,
         checking: `Waiting for ${name} to answer. SOS in ${left}.`,
         sos: `SOS from ${name}. Tap to see where.`,
         resolved: '',

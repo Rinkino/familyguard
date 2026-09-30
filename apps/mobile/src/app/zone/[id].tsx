@@ -5,9 +5,9 @@ import { Platform, View } from 'react-native';
 import { Chips } from '@/components/Chips';
 import { FamilyMap } from '@/components/map/FamilyMap';
 import type { FamilyMapHandle } from '@/components/map/types';
-import { Button, Field, Screen, Section, Row, T, TopBar, confirm } from '@/components/ui';
+import { Button, Field, Screen, Section, Row, T, TopBar, attempt, confirm } from '@/components/ui';
 import { formatDistance, type LatLng } from '@/lib/geo';
-import type { Who, Zone } from '@/mock/data';
+import type { Who } from '@/types';
 import { firstName, formatRemaining, useNow, useStore, whoName, zoneTargets } from '@/state/store';
 import { space, useColors } from '@/theme';
 
@@ -71,6 +71,9 @@ export default function ZoneScreen() {
           <Row><T v="body">After {existing.graceMin} min outside, you're asked if you're OK.</T></Row>
           <Row last><T v="body">No answer in {existing.countdownS} seconds sends an SOS with your location and starts recording audio.</T></Row>
         </Section>
+        <View style={{ marginTop: space.xl }}>
+          <PretendLeave zoneId={existing.id} />
+        </View>
       </Screen>
     );
   }
@@ -83,22 +86,21 @@ export default function ZoneScreen() {
     : Date.now() + duration * HOUR;
   const customInvalid = duration === 'custom' && !(Number(customHours) > 0 && Number(customHours) <= 168);
 
-  const save = () => {
-    const zone: Zone = {
-      id: existing?.id ?? `z-${Date.now()}`,
-      name: name.trim(),
-      forId,
-      setById: 'me',
-      center,
-      radiusM,
-      endsAt,
-      graceMin,
-      countdownS,
-      watcherIds: watcherIds.filter((w) => w !== forId),
-    };
-    store.dispatch({ type: 'saveZone', zone });
-    router.back();
-  };
+  const save = () =>
+    attempt(
+      store.actions.saveZone({
+        id: existing?.id,
+        name: name.trim(),
+        forId,
+        center,
+        radiusM,
+        endsAt,
+        graceMin,
+        countdownS,
+        watcherIds: watcherIds.filter((w) => w !== forId),
+      }),
+      () => router.back()
+    );
 
   const durationOptions: { key: Duration; label: string }[] = [
     ...(existing?.endsAt ? [{ key: 'keep' as const, label: `Keep (${formatRemaining(existing.endsAt - now)} left)` }] : []),
@@ -186,7 +188,7 @@ export default function ZoneScreen() {
         <View style={{ padding: space.md, gap: space.sm }}>
           <T v="body">Wait before asking “Are you OK?”</T>
           <Chips
-            options={[0, 5, 10, 15, 30].map((m) => ({ key: m, label: m === 0 ? 'Ask now' : `${m} min` }))}
+            options={[0, 1, 5, 10, 15, 30].map((m) => ({ key: m, label: m === 0 ? 'Ask now' : `${m} min` }))}
             selected={graceMin}
             onPress={setGraceMin}
           />
@@ -221,21 +223,13 @@ export default function ZoneScreen() {
         )}
         {existing && (
           <>
-            <Button
-              kind="secondary"
-              label={`Simulate ${existing.forId === 'me' ? 'you' : personName} leaving`}
-              onPress={() => {
-                store.dispatch({ type: 'simulateLeave', zoneId: existing.id, now: Date.now() });
-                router.back();
-              }}
-            />
+            {existing.forId === 'me' && <PretendLeave zoneId={existing.id} />}
             <Button
               kind="danger"
               label="Turn off zone"
               onPress={() =>
                 confirm(`Turn off ${existing.name}?`, `${personName === 'you' ? 'Your watchers' : personName} will be told it has ended.`, 'Turn off', () => {
-                  store.dispatch({ type: 'endZone', zoneId: existing.id });
-                  router.back();
+                  attempt(store.actions.endZone(existing.id), () => router.back());
                 })
               }
             />
@@ -243,5 +237,25 @@ export default function ZoneScreen() {
         )}
       </View>
     </Screen>
+  );
+}
+
+/** Testing aid: reports a position just outside the zone and holds it for 3 minutes. */
+function PretendLeave({ zoneId }: { zoneId: string }) {
+  const c = useColors();
+  const store = useStore();
+  const zone = store.zones.find((z) => z.id === zoneId);
+  if (!zone) return null;
+  return (
+    <View style={{ gap: space.xs }}>
+      <Button
+        kind="secondary"
+        label="Test: pretend I left"
+        onPress={() => attempt(store.actions.pretendLeave(zone), () => router.back())}
+      />
+      <T v="tiny" color={c.muted} style={{ textAlign: 'center' }}>
+        Sends a fake position just outside for 3 minutes, then real GPS takes over again.
+      </T>
+    </View>
   );
 }

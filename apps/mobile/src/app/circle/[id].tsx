@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
-import { Avatar, Button, Row, Screen, Section, T, Toggle, TopBar, confirm } from '@/components/ui';
+import { Avatar, Button, Row, Screen, Section, T, Toggle, TopBar, confirm, attempt } from '@/components/ui';
 import { firstName, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
@@ -32,7 +32,7 @@ export default function CircleDetail() {
           <T v="bodyStrong" style={{ flex: 1 }}>Share your location with everyone in {circle.name}</T>
           <Toggle
             value={circle.shareWithCircle}
-            onChange={(v) => store.dispatch({ type: 'saveCircle', circle: { ...circle, shareWithCircle: v } })}
+            onChange={(v) => attempt(store.actions.saveCircle({ ...circle, shareWithCircle: v }))}
           />
         </Row>
       </Section>
@@ -44,7 +44,7 @@ export default function CircleDetail() {
             <Row
               key={p.id}
               last={i === connected.length - 1}
-              onPress={() => store.dispatch({ type: 'toggleCircleMember', circleId: circle.id, personId: p.id })}
+              onPress={() => attempt(store.actions.toggleCircleMember(circle.id, p.id))}
               accessibilityLabel={`${inCircle ? 'Remove' : 'Add'} ${p.name}`}
             >
               <Avatar name={p.name} tint={p.tint} size={36} />
@@ -77,8 +77,7 @@ export default function CircleDetail() {
           label="Delete circle"
           onPress={() =>
             confirm(`Delete ${circle.name}?`, 'People stay in your list. Only the group is removed.', 'Delete', () => {
-              store.dispatch({ type: 'deleteCircle', circleId: circle.id });
-              router.back();
+              attempt(store.actions.deleteCircle(circle.id), () => router.back());
             })
           }
         />

@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
-import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, TopBar, confirm } from '@/components/ui';
-import { effectiveShare, firstName, sharingCircles, useStore } from '@/state/store';
+import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, TopBar, confirm, attempt } from '@/components/ui';
+import { distanceMeters, formatDistance } from '@/lib/geo';
+import { effectiveShare, firstName, formatAgo, sharingCircles, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function PersonDetail() {
@@ -25,17 +26,12 @@ export default function PersonDetail() {
   const iShareNow = effectiveShare(store, person);
   const pending = person.status === 'pending';
 
-  const remove = (verb: 'Remove' | 'Block') =>
+  const remove = () =>
     confirm(
-      `${verb} ${name}?`,
-      verb === 'Remove'
-        ? `${name} will stop seeing your location and you'll stop seeing theirs. You can add each other again later.`
-        : `${name} won't be able to see you or send you requests.`,
-      verb,
-      () => {
-        store.dispatch({ type: 'removePerson', personId: person.id });
-        router.back();
-      }
+      `Remove ${name}?`,
+      `${name} will stop seeing your location and you'll stop seeing theirs. Zones between you are turned off. You can add each other again later.`,
+      'Remove',
+      () => attempt(store.actions.removePerson(person.id), () => router.back())
     );
 
   return (
@@ -72,13 +68,17 @@ export default function PersonDetail() {
                 </T>
               ) : null}
             </View>
-            <Toggle value={person.iShare} onChange={(v) => store.dispatch({ type: 'setShare', personId: person.id, value: v })} />
+            <Toggle value={person.iShare} onChange={(v) => attempt(store.actions.setShare(person.id, v))} />
           </Row>
           <Row last>
             <View style={{ flex: 1 }}>
               <T v="bodyStrong">{name} shares with you</T>
               <T v="small" color={c.muted}>
-                {person.theyShare ? `${person.place}, ${person.lastSeen}` : `Not right now. Only ${name} can change this.`}
+                {person.theyShare
+                  ? person.coord && person.locationAt
+                    ? `${formatDistance(distanceMeters(store.myCoord, person.coord))} from you, ${formatAgo(person.locationAt)}`
+                    : 'Sharing. Waiting for their first location.'
+                  : `Not right now. Only ${name} can change this.`}
               </T>
             </View>
             <Icon name={person.theyShare ? 'eye' : 'eye-off'} color={person.theyShare ? c.beacon : c.moss} />
@@ -103,7 +103,7 @@ export default function PersonDetail() {
                   key={circle.id}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: inCircle }}
-                  onPress={() => store.dispatch({ type: 'toggleCircleMember', circleId: circle.id, personId: person.id })}
+                  onPress={() => attempt(store.actions.toggleCircleMember(circle.id, person.id))}
                   style={{
                     paddingHorizontal: space.md,
                     height: 36,
@@ -121,8 +121,7 @@ export default function PersonDetail() {
       )}
 
       <View style={{ marginTop: space.xl }}>
-        <Button kind="danger" label={pending ? 'Cancel request' : `Remove ${name}`} onPress={() => remove('Remove')} />
-        {!pending && <Button kind="danger" label={`Block ${name}`} onPress={() => remove('Block')} />}
+        <Button kind="danger" label={pending ? 'Cancel request' : `Remove ${name}`} onPress={remove} />
       </View>
     </Screen>
   );

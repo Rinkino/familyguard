@@ -1,10 +1,10 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Share, View } from 'react-native';
 import { LabelPicker } from '@/components/LabelPicker';
 import { Avatar, Button, Field, Row, Screen, Section, T, Toggle, TopBar } from '@/components/ui';
-import { firstName, lookupInviteCode, useStore } from '@/state/store';
+import { firstName, useStore } from '@/state/store';
 import { fonts, space, useColors } from '@/theme';
 
 type Mode = 'mine' | 'theirs';
@@ -19,8 +19,35 @@ export default function AddPerson() {
   const [templateId, setTemplateId] = useState<string>();
   const [share, setShare] = useState(false);
 
-  const found = lookupInviteCode(code);
-  const inviteLink = `https://familyguard.app/i/${store.me.inviteCode}`;
+  const [found, setFound] = useState<{ id: string; name: string; tint: number } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  // Codes look like KX7-42P; accept them typed with or without the dash.
+  const clean = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const formatted = clean.length === 6 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean;
+
+  useEffect(() => {
+    setFound(null);
+    setError('');
+    if (clean.length !== 6) return;
+    let cancelled = false;
+    setLooking(true);
+    store.actions
+      .previewCode(formatted)
+      .then((p) => {
+        if (cancelled) return;
+        setFound(p);
+        if (!p) setError('No one has that code. Check it and try again.');
+      })
+      .catch((e) => !cancelled && setError(e.message))
+      .finally(() => !cancelled && setLooking(false));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formatted]);
 
   const copy = async () => {
     await Clipboard.setStringAsync(store.me.inviteCode);
@@ -28,22 +55,17 @@ export default function AddPerson() {
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const send = () => {
+  const send = async () => {
     if (!found) return;
-    store.dispatch({
-      type: 'addPending',
-      person: {
-        id: `p-${Date.now()}`,
-        name: found.name,
-        tint: found.tint,
-        label: label.trim(),
-        templateId,
-        iShare: share,
-        theyShare: false,
-        status: 'pending',
-      },
-    });
-    router.back();
+    setBusy(true);
+    setError('');
+    try {
+      await store.actions.connect(formatted, label.trim(), templateId, share);
+      router.back();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't send the request. Try again.");
+      setBusy(false);
+    }
   };
 
   return (
@@ -75,13 +97,12 @@ export default function AddPerson() {
           <View style={{ backgroundColor: c.surface, borderRadius: 24, paddingVertical: space.xl, alignItems: 'center', gap: space.sm }}>
             <T v="small" color={c.muted}>Your code</T>
             <T v="display" style={{ fontFamily: fonts.heavy, fontSize: 48, lineHeight: 54, letterSpacing: 4 }}>{store.me.inviteCode}</T>
-            <T v="tiny" color={c.muted}>Expires in 7 days</T>
           </View>
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Button kind="secondary" label={copied ? 'Copied' : 'Copy code'} onPress={copy} style={{ flex: 1 }} />
             <Button
-              label="Send link"
-              onPress={() => Share.share({ message: `Add me on FamilyGuard with code ${store.me.inviteCode}: ${inviteLink}` })}
+              label="Send code"
+              onPress={() => Share.share({ message: `Add me on FamilyGuard. My code is ${store.me.inviteCode}` })}
               style={{ flex: 1 }}
             />
           </View>
@@ -97,7 +118,13 @@ export default function AddPerson() {
             autoCorrect={false}
             autoFocus
           />
-          {code.length > 0 && !found && <T v="small" color={c.muted}>Codes are 6 letters or numbers. Try any code for the demo.</T>}
+          {looking ? (
+            <T v="small" color={c.muted}>Looking up {formatted}…</T>
+          ) : error ? (
+            <T v="small" color={c.flare}>{error}</T>
+          ) : clean.length > 0 && clean.length < 6 ? (
+            <T v="small" color={c.muted}>Codes have 6 letters and numbers, like KX7-42P.</T>
+          ) : null}
 
           {found && (
             <>
@@ -106,7 +133,7 @@ export default function AddPerson() {
                   <Avatar name={found.name} tint={found.tint} />
                   <View style={{ flex: 1 }}>
                     <T v="bodyStrong">{found.name}</T>
-                    <T v="small" color={c.muted}>Found from code {code}</T>
+                    <T v="small" color={c.muted}>Code {formatted}</T>
                   </View>
                 </Row>
               </Section>
@@ -133,7 +160,7 @@ export default function AddPerson() {
                 </Row>
               </Section>
 
-              <Button label="Send request" disabled={!label.trim()} onPress={send} />
+              <Button label={busy ? 'Sending…' : 'Send request'} disabled={!label.trim() || busy} onPress={send} />
             </>
           )}
         </View>

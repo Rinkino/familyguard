@@ -287,6 +287,11 @@ export function notice(title: string, message: string) {
   else Alert.alert(title, message);
 }
 
+/** Runs a save in the background and tells the user if it failed. */
+export function attempt(p: Promise<unknown>, onDone?: () => void) {
+  p.then(() => onDone?.()).catch((e) => notice("That didn't save", e instanceof Error ? e.message : 'Check your connection and try again.'));
+}
+
 /** Cross-platform confirm dialog (RN Alert is a no-op on web). */
 export function confirm(title: string, message: string, action: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {

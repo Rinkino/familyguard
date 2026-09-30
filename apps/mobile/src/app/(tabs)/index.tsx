@@ -1,12 +1,12 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, LayoutAnimation, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertBanner } from '@/components/AlertBanner';
 import { FamilyMap } from '@/components/map/FamilyMap';
 import type { FamilyMapHandle, MapPerson } from '@/components/map/types';
-import { Avatar, Button, Row, T } from '@/components/ui';
+import { Avatar, Button, Row, T, attempt } from '@/components/ui';
 import { distanceMeters, formatDistance, formatDuration, type LatLng } from '@/lib/geo';
 import { addressAt, getRoute, hasMapboxToken, searchPlaces, type Place, type Route, type TravelMode } from '@/lib/mapbox';
 import { activeAlerts, firstName, formatRemaining, useNow, useStore, whoName } from '@/state/store';
@@ -199,6 +199,8 @@ export default function MapScreen() {
           {!query && alerts.map((a) => <AlertBanner key={a.id} alert={a} />)}
         </View>
 
+        <SosButton bottom={full ? space.md : space.md + 20} />
+
         {/* Map controls */}
         <View style={{ position: 'absolute', right: space.md, bottom: full ? space.md : space.md + 20, gap: space.sm }}>
           <MapButton icon="crosshair" label="Show me" onPress={() => map.current?.flyTo(store.myCoord, 3000)} />
@@ -331,6 +333,11 @@ export default function MapScreen() {
 
                 <View>
                   <T v="heading">Sharing with you</T>
+                  {people.length === 1 && (
+                    <T v="small" color={c.muted} style={{ marginTop: space.xs }}>
+                      No one is sharing their location with you yet.
+                    </T>
+                  )}
                   {people.slice(1).map((p) => (
                     <Pressable key={p.id} onPress={() => map.current?.flyTo(p.coord, 1500)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
                       <Avatar name={p.name} tint={p.tint} size={32} />
@@ -340,21 +347,6 @@ export default function MapScreen() {
                   ))}
                 </View>
 
-                {store.zones.length > 0 && (
-                  <View style={{ gap: space.sm }}>
-                    <T v="heading">Try the alerts</T>
-                    <T v="small" color={c.muted}>Demo only. Timers run fast: each minute of waiting takes one second.</T>
-                    {store.zones.map((z) => (
-                      <Button
-                        key={z.id}
-                        kind="secondary"
-                        label={z.forId === 'me' ? `You leave ${z.name}` : `${whoName(store.people, z.forId)} leaves ${z.name}`}
-                        disabled={zoneAlert.has(z.id)}
-                        onPress={() => store.dispatch({ type: 'simulateLeave', zoneId: z.id, now: Date.now() })}
-                      />
-                    ))}
-                  </View>
-                )}
 
                 {!hasMapboxToken && (
                   <T v="tiny" color={c.muted}>
@@ -392,6 +384,69 @@ function MapButton({ icon, label, onPress }: { icon: keyof typeof Feather.glyphM
       }}
     >
       <Feather name={icon} size={18} color={c.ink} />
+    </Pressable>
+  );
+}
+
+/** Hold for 2 seconds to send an SOS to everyone you're connected to. */
+function SosButton({ bottom }: { bottom: number }) {
+  const c = useColors();
+  const store = useStore();
+  const progress = useRef(new Animated.Value(0)).current;
+  const [holding, setHolding] = useState(false);
+  const mySos = store.alerts.find((a) => a.forId === 'me' && a.stage === 'sos');
+
+  const start = () => {
+    if (mySos) return router.push('/check-in');
+    setHolding(true);
+    Animated.timing(progress, { toValue: 1, duration: 2000, useNativeDriver: false }).start(({ finished }) => {
+      setHolding(false);
+      progress.setValue(0);
+      if (finished) attempt(store.actions.sosNow(null), () => router.push('/check-in'));
+    });
+  };
+  const cancel = () => {
+    progress.stopAnimation();
+    progress.setValue(0);
+    setHolding(false);
+  };
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={mySos ? 'SOS active. Open it.' : 'Hold for 2 seconds to send an SOS'}
+      onPressIn={start}
+      onPressOut={cancel}
+      style={{
+        position: 'absolute',
+        left: space.md,
+        bottom,
+        height: 52,
+        minWidth: 52,
+        paddingHorizontal: space.md,
+        borderRadius: 26,
+        backgroundColor: c.flare,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 4,
+      }}
+    >
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.25)',
+          width: progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+        }}
+      />
+      <T v="bodyStrong" color="#FFFFFF">{mySos ? 'SOS active' : holding ? 'Keep holding…' : 'Hold for SOS'}</T>
     </Pressable>
   );
 }

@@ -8,11 +8,13 @@ import { avatarTints, space, useColors } from '@/theme';
 
 export default function Onboarding() {
   const c = useColors();
-  const { dispatch } = useStore();
+  const { actions } = useStore();
   const { session } = useAuth();
   const [step, setStep] = useState<'name' | 'lines'>('name');
   const [name, setName] = useState(() => nameFromSession(session));
   const [tint, setTint] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   if (step === 'name') {
     return (
@@ -68,7 +70,21 @@ export default function Onboarding() {
         <T v="small" color={c.muted}>
           You only control your half. Nobody can turn on your sharing but you.
         </T>
-        <Button label="Get started" onPress={() => dispatch({ type: 'finishOnboarding', name: name.trim(), tint })} />
+        <Button
+          label={saving ? 'Saving…' : 'Get started'}
+          disabled={saving}
+          onPress={async () => {
+            setSaving(true);
+            setError('');
+            try {
+              await actions.saveProfile(name.trim(), tint);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Couldn't save. Try again.");
+              setSaving(false);
+            }
+          }}
+        />
+        {error ? <T v="small" color={c.flare}>{error}</T> : null}
       </View>
     </Screen>
   );

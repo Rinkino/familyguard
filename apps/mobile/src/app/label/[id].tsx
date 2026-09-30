@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { LabelPicker } from '@/components/LabelPicker';
-import { Button, Screen, T, TopBar } from '@/components/ui';
+import { Button, Screen, T, TopBar, attempt } from '@/components/ui';
 import { firstName, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
@@ -38,8 +38,7 @@ export default function ChangeLabel() {
           label="Save label"
           disabled={!label.trim()}
           onPress={() => {
-            store.dispatch({ type: 'setLabel', personId: person.id, label: label.trim(), templateId });
-            router.back();
+            attempt(store.actions.setLabel(person.id, label.trim(), templateId), () => router.back());
           }}
         />
       </View>

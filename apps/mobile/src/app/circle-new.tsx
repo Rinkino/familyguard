@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { Button, Field, Row, Screen, Section, T, Toggle, TopBar } from '@/components/ui';
+import { Button, Field, Row, Screen, Section, T, Toggle, TopBar, attempt } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { space } from '@/theme';
 
@@ -11,9 +11,9 @@ export default function NewCircle() {
   const [share, setShare] = useState(false);
 
   const create = () => {
-    const id = `c-${Date.now()}`;
-    store.dispatch({ type: 'saveCircle', circle: { id, name: name.trim(), memberIds: [], shareWithCircle: share } });
-    router.replace(`/circle/${id}`);
+    attempt(
+      store.actions.saveCircle({ name: name.trim(), shareWithCircle: share }).then((id) => router.replace(`/circle/${id}`))
+    );
   };
 
   return (

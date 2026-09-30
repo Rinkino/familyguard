@@ -4,25 +4,26 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Field, Screen, T } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
-// Real sign-in (Google + email link) when Supabase is configured; simulated otherwise.
+// Apple sign-in needs a paid Apple Developer account; hidden until then.
+const APPLE_SIGN_IN_READY = false;
+
 export default function SignIn() {
   const c = useColors();
   const auth = useAuth();
-  const { dispatch } = useStore();
   const [emailMode, setEmailMode] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState<'google' | 'email' | null>(null);
   const [error, setError] = useState('');
 
-  const demoSignIn = (address: string) => dispatch({ type: 'signIn', email: address });
+  // Without Supabase keys there's no account system to sign in to.
+  const notConfigured = () => setError('Sign-in is not set up. Add the Supabase keys to apps/mobile/.env.');
   const validEmail = /\S+@\S+\.\S+/.test(email);
 
   const google = async () => {
-    if (!auth.enabled) return demoSignIn('you@gmail.com');
+    if (!auth.enabled) return notConfigured();
     setError('');
     setBusy('google');
     try {
@@ -35,7 +36,7 @@ export default function SignIn() {
   };
 
   const sendLink = async () => {
-    if (!auth.enabled) return setSent(true);
+    if (!auth.enabled) return notConfigured();
     setError('');
     setBusy('email');
     try {
@@ -65,13 +66,12 @@ export default function SignIn() {
       <View style={{ gap: space.sm, marginTop: space.xl }}>
         {!emailMode ? (
           <>
-            {/* Apple needs a paid Apple Developer account; demo mode only for now. */}
-            {!auth.enabled && Platform.OS !== 'android' && (
+            {APPLE_SIGN_IN_READY && Platform.OS !== 'android' && (
               <Button
                 kind="ink"
                 label="Continue with Apple"
                 icon={<FontAwesome name="apple" size={18} color={c.bg} />}
-                onPress={() => demoSignIn('you@icloud.com')}
+                onPress={notConfigured}
               />
             )}
             <Button
@@ -109,9 +109,6 @@ export default function SignIn() {
             <T v="body" color={c.muted}>
               We sent a sign-in link to {email}. Open it on this phone to continue.
             </T>
-            {!auth.enabled && (
-              <Button label="Open link (demo)" onPress={() => demoSignIn(email)} style={{ marginTop: space.md }} />
-            )}
             <Button kind="plain" label="Use a different email" onPress={() => setSent(false)} />
           </>
         )}
@@ -119,11 +116,6 @@ export default function SignIn() {
         {error ? <T v="small" color={c.flare} style={{ textAlign: 'center' }}>{error}</T> : null}
       </View>
 
-      {!auth.enabled && (
-        <T v="tiny" color={c.muted} style={{ textAlign: 'center', marginTop: space.lg }}>
-          Demo build. Sign-in is simulated and no data leaves this device.
-        </T>
-      )}
     </Screen>
   );
 }

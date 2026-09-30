@@ -41,7 +41,19 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-font",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "FamilyGuard records audio during an SOS so the people you trust can hear what is happening."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FamilyGuard shares your location with the people you choose and checks your zones."
+        }
+      ]
     ],
     "extra": {
       "router": {},

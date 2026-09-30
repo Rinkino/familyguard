@@ -2,25 +2,24 @@ import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { FamilyMap } from '@/components/map/FamilyMap';
-import { Button, Screen, T, TopBar, notice } from '@/components/ui';
+import { SosClips } from '@/components/SosClips';
+import { Button, Screen, T, TopBar, attempt, notice } from '@/components/ui';
 import { distanceMeters, formatDistance } from '@/lib/geo';
-import type { AlertStage } from '@/mock/data';
 import { formatRemaining, useNow, useStore, whoName } from '@/state/store';
+import type { AlertStage } from '@/types';
 import { space, useColors } from '@/theme';
 
 const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-/** What a watcher sees when someone leaves a zone. */
+/** What a watcher sees when someone leaves a zone or sends an SOS. */
 export default function AlertDetail() {
   const c = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const store = useStore();
   const now = useNow();
   const alert = store.alerts.find((a) => a.id === id);
-  const zone = store.zones.find((z) => z.id === alert?.zoneId);
-  const person = store.people.find((p) => p.id === alert?.forId);
 
-  if (!alert || !zone || !person?.coord) {
+  if (!alert) {
     return (
       <Screen>
         <TopBar close />
@@ -29,52 +28,62 @@ export default function AlertDetail() {
     );
   }
 
+  const person = store.people.find((p) => p.id === alert.forId);
+  const zone = store.zones.find((z) => z.id === alert.zoneId);
   const name = whoName(store.people, alert.forId);
-  const outside = Math.max(0, distanceMeters(person.coord, zone.center) - zone.radiusM);
+  const coord = person?.coord ?? alert.coord;
+  const zoneName = alert.zoneName ?? 'the zone';
+  const outside = zone && coord ? Math.max(0, distanceMeters(coord, zone.center) - zone.radiusM) : null;
   const left = alert.stageEndsAt ? formatRemaining(alert.stageEndsAt - now) : '';
-  const watchers = ['You', ...zone.watcherIds.map((w) => whoName(store.people, w))].join(', ');
+  const manual = alert.kind === 'manual';
+  const open = alert.stage !== 'resolved';
+  const urgent = alert.stage === 'sos' || alert.stage === 'checking';
 
   const headline: Record<AlertStage, string> = {
-    left: `${name} left ${zone.name}`,
+    left: `${name} left ${zoneName}`,
     checking: `Waiting for ${name} to answer`,
     sos: `SOS from ${name}`,
     resolved:
-      alert.resolvedHow === 'back-inside' ? `${name} is back inside ${zone.name}`
+      alert.resolvedHow === 'back-inside' ? `${name} is back inside ${zoneName}`
       : alert.resolvedHow === 'said-ok' ? `${name} answered: I'm OK`
-      : `You marked ${name} safe`,
+      : `${name} was marked safe`,
   };
   const body: Record<AlertStage, string> = {
-    left: `${formatDistance(outside)} outside the zone. If ${name} isn't back in ${left}, we'll ask “Are you OK?” on ${name}'s phone.`,
+    left: `${outside != null ? `${formatDistance(outside)} outside the zone. ` : ''}If ${name} isn't back in ${left}, we'll ask “Are you OK?” on ${name}'s phone.`,
     checking: `${name} has ${left} to answer before an SOS goes out to everyone watching.`,
-    sos: `${name} didn't answer. Audio recording started on ${name}'s phone. Call ${name}, or get help if you can't reach them.`,
+    sos: manual
+      ? `${name} pressed SOS. Audio is recording on ${name}'s phone. Call ${name}, or get help if you can't reach them.`
+      : `${name} didn't answer. Audio is recording on ${name}'s phone. Call ${name}, or get help if you can't reach them.`,
     resolved: 'No further alerts for this.',
   };
 
-  const steps: { label: string; at?: number; done: boolean; now: boolean }[] = [
-    { label: `Left ${zone.name}. ${watchers} alerted.`, at: alert.leftAt, done: true, now: alert.stage === 'left' },
-    { label: `Asked “Are you OK?”`, done: ['checking', 'sos'].includes(alert.stage), now: alert.stage === 'checking' },
-    { label: 'SOS sent, recording audio', at: alert.sosAt, done: alert.stage === 'sos', now: alert.stage === 'sos' },
-  ];
-
-  const urgent = alert.stage === 'sos' || alert.stage === 'checking';
+  const steps = manual
+    ? [{ label: 'SOS sent, recording audio', at: alert.sosAt, done: true, now: alert.stage === 'sos' }]
+    : [
+        { label: `Left ${zoneName}. Watchers alerted.`, at: alert.leftAt, done: true, now: alert.stage === 'left' },
+        { label: 'Asked “Are you OK?”', done: ['checking', 'sos'].includes(alert.stage), now: alert.stage === 'checking' },
+        { label: 'SOS sent, recording audio', at: alert.sosAt, done: alert.stage === 'sos', now: alert.stage === 'sos' },
+      ];
 
   return (
     <Screen>
-      <TopBar close title="Zone alert" />
+      <TopBar close title={manual ? 'SOS' : 'Zone alert'} />
 
-      <View style={{ height: 240, borderRadius: 20, overflow: 'hidden', marginTop: space.sm }}>
-        <FamilyMap
-          initialCenter={zone.center}
-          initialSpanM={(zone.radiusM + outside) * 3}
-          zones={[{ ...zone, alert: alert.stage !== 'resolved' }]}
-          people={[{ id: person.id, name: person.name, tint: person.tint, coord: person.coord, alert: alert.stage !== 'resolved' }]}
-        />
-      </View>
+      {coord && (
+        <View style={{ height: 240, borderRadius: 20, overflow: 'hidden', marginTop: space.sm }}>
+          <FamilyMap
+            initialCenter={coord}
+            initialSpanM={zone ? (zone.radiusM + (outside ?? 0)) * 3 : 1500}
+            zones={zone ? [{ ...zone, alert: open }] : []}
+            people={[{ id: alert.forId, name: person?.name ?? name, tint: person?.tint ?? 0, coord, alert: open }]}
+          />
+        </View>
+      )}
 
       <T v="title" color={urgent ? c.flare : c.ink} style={{ marginTop: space.lg }}>{headline[alert.stage]}</T>
       <T v="body" color={c.muted} style={{ marginTop: space.sm }}>{body[alert.stage]}</T>
 
-      {alert.stage !== 'resolved' && (
+      {open && (
         <View style={{ marginTop: space.lg, gap: space.md }}>
           {steps.map((s) => (
             <View key={s.label} style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
@@ -101,32 +110,28 @@ export default function AlertDetail() {
         </View>
       )}
 
+      {alert.sosAt && (
+        <View style={{ marginTop: space.lg, gap: space.sm }}>
+          <T v="heading">Audio from {name}'s phone</T>
+          <SosClips alertId={alert.id} />
+        </View>
+      )}
+
       <View style={{ marginTop: space.xl, gap: space.sm }}>
-        {alert.stage === 'resolved' ? (
-          <Button
-            label="Done"
-            onPress={() => {
-              store.dispatch({ type: 'dismissAlert', alertId: alert.id });
-              router.back();
-            }}
-          />
-        ) : (
+        {open ? (
           <>
             <Button
               kind={urgent ? 'primary' : 'secondary'}
               label={`Call ${name}`}
               icon={<Feather name="phone" size={16} color={urgent ? c.onBeacon : c.ink} />}
-              onPress={() => notice('Calling is not set up yet', 'In the real app this dials their phone number.')}
+              onPress={() => notice('Calling is not set up yet', "Phone numbers aren't collected yet. Call them from your contacts.")}
             />
             {alert.stage === 'sos' && (
-              <Button kind="secondary" label={`Mark ${name} safe`} onPress={() => store.dispatch({ type: 'markSafe', alertId: alert.id })} />
-            )}
-            <T v="smallStrong" color={c.muted} style={{ marginTop: space.lg }}>Demo</T>
-            <Button kind="secondary" label={`${name} comes back inside`} onPress={() => store.dispatch({ type: 'backInside', alertId: alert.id })} />
-            {alert.stage === 'checking' && (
-              <Button kind="secondary" label={`${name} answers I'm OK`} onPress={() => store.dispatch({ type: 'sayOk', alertId: alert.id })} />
+              <Button kind="secondary" label={`Mark ${name} safe`} onPress={() => attempt(store.actions.markSafe(alert.id))} />
             )}
           </>
+        ) : (
+          <Button label="Done" onPress={() => router.back()} />
         )}
       </View>
     </Screen>

@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Row, Screen, Section, T } from '@/components/ui';
-import { effectiveShare, firstName, useStore } from '@/state/store';
+import { distanceMeters, formatDistance } from '@/lib/geo';
+import { effectiveShare, firstName, formatAgo, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function People() {
@@ -11,6 +12,7 @@ export default function People() {
   const store = useStore();
   const connected = store.people.filter((p) => p.status === 'connected');
   const pending = store.people.filter((p) => p.status === 'pending');
+  const incoming = store.people.filter((p) => p.status === 'incoming');
   const seeMe = connected.filter((p) => effectiveShare(store, p)).length;
   const iSee = connected.filter((p) => p.theyShare).length;
 
@@ -30,7 +32,7 @@ export default function People() {
 
       {store.pausedAll ? (
         <Pressable
-          onPress={() => store.dispatch({ type: 'setPausedAll', value: false })}
+          onPress={() => store.actions.setPausedAll(false)}
           style={{ marginTop: space.md, padding: space.md, borderRadius: 14, backgroundColor: c.flareSoft }}
         >
           <T v="smallStrong" color={c.flare}>Sharing is paused for everyone. Tap to resume.</T>
@@ -41,13 +43,28 @@ export default function People() {
         </T>
       )}
 
-      {connected.length === 0 && pending.length === 0 ? (
+      {store.people.length === 0 ? (
         <View style={{ marginTop: space.xxl, gap: space.md }}>
           <T v="heading">Add your first person</T>
           <T v="body" color={c.muted}>Send them your code, or enter theirs. Nothing is shared until you choose to.</T>
           <Button label="Add person" onPress={() => router.push('/add-person')} />
         </View>
       ) : null}
+
+      {incoming.length > 0 && (
+        <Section title="Want to connect with you">
+          {incoming.map((p, i) => (
+            <Row key={p.id} last={i === incoming.length - 1} onPress={() => router.push(`/accept/${p.id}`)}>
+              <Avatar name={p.name} tint={p.tint} />
+              <View style={{ flex: 1 }}>
+                <T v="bodyStrong">{p.name}</T>
+                <T v="small" color={c.muted}>Tap to accept and choose what to share.</T>
+              </View>
+              <T v="smallStrong" color={c.beacon}>Accept</T>
+            </Row>
+          ))}
+        </Section>
+      )}
 
       {pending.length > 0 && (
         <Section title="Waiting to accept">
@@ -77,7 +94,11 @@ export default function People() {
                     {firstName(p.name)} <T v="body" color={c.muted}>({p.label})</T>
                   </T>
                   <T v="small" color={p.theyShare ? c.ink : c.muted} numberOfLines={1}>
-                    {p.theyShare ? `${p.place}, ${p.lastSeen}` : 'Location not shared with you'}
+                    {!p.theyShare
+                      ? 'Location not shared with you'
+                      : p.coord && p.locationAt
+                        ? `${formatDistance(distanceMeters(store.myCoord, p.coord))} away, ${formatAgo(p.locationAt)}`
+                        : 'Sharing, waiting for first location'}
                   </T>
                 </View>
                 <View style={{ width: 64, height: 12, flexDirection: 'row' }}>

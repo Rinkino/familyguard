@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { Button, Field, Row, Screen, Section, T, Toggle, TopBar, confirm } from '@/components/ui';
+import { Button, Field, Row, Screen, Section, T, Toggle, TopBar, attempt, confirm } from '@/components/ui';
 import { useStore } from '@/state/store';
 import { space } from '@/theme';
 
@@ -14,11 +14,7 @@ export default function TemplateEdit() {
   const usedBy = existing ? store.people.filter((p) => p.templateId === existing.id).length : 0;
 
   const save = () => {
-    store.dispatch({
-      type: 'saveTemplate',
-      template: { id: existing?.id ?? `t-${Date.now()}`, name: name.trim(), builtIn: false, shareByDefault },
-    });
-    router.back();
+    attempt(store.actions.saveTemplate({ id: existing?.id, name: name.trim(), shareByDefault }), () => router.back());
   };
 
   return (
@@ -49,8 +45,7 @@ export default function TemplateEdit() {
             label="Delete label"
             onPress={() =>
               confirm(`Delete ${existing.name}?`, 'People with this label keep it as a custom label.', 'Delete', () => {
-                store.dispatch({ type: 'deleteTemplate', templateId: existing.id });
-                router.back();
+                attempt(store.actions.deleteTemplate(existing.id), () => router.back());
               })
             }
           />

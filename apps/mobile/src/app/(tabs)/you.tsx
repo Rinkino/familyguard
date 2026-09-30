@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
-import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, confirm } from '@/components/ui';
+import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, confirm, attempt } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
@@ -23,7 +23,7 @@ export default function You() {
         <Row last>
           <Icon name="pause-circle" color={store.pausedAll ? c.flare : c.muted} />
           <T v="bodyStrong" style={{ flex: 1 }}>Pause sharing with everyone</T>
-          <Toggle value={store.pausedAll} onChange={(v) => store.dispatch({ type: 'setPausedAll', value: v })} />
+          <Toggle value={store.pausedAll} onChange={(v) => attempt(store.actions.setPausedAll(v))} />
         </Row>
       </Section>
 
@@ -38,12 +38,22 @@ export default function You() {
         </Row>
       </Section>
 
-      <Section title="Demo">
-        <Row last onPress={() => store.dispatch({ type: 'reset' })}>
-          <Icon name="rotate-ccw" />
-          <T v="body" style={{ flex: 1 }}>Reset sample people and circles</T>
+      <Section title="Your code" note="Give this to someone so they can add you.">
+        <Row last onPress={() => router.push('/add-person')}>
+          <Icon name="share-2" />
+          <T v="bodyStrong" style={{ flex: 1, letterSpacing: 2 }}>{store.me.inviteCode}</T>
+          <Icon name="chevron-right" />
         </Row>
       </Section>
+
+      {store.permission === 'denied' && (
+        <Section title="Location" note="Turn on location for this app in your phone's Settings so people you share with can see you.">
+          <Row last>
+            <Icon name="alert-circle" color={c.flare} />
+            <T v="body" style={{ flex: 1 }}>Location access is off</T>
+          </Row>
+        </Section>
+      )}
 
       <View style={{ marginTop: space.xl }}>
         <Button
@@ -52,7 +62,6 @@ export default function You() {
           onPress={() =>
             confirm('Sign out?', 'You can sign back in any time.', 'Sign out', async () => {
               await auth.signOut();
-              store.dispatch({ type: 'signOut' });
             })
           }
         />

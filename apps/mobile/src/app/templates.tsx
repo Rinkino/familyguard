@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
 import { Button, Icon, Row, Screen, Section, T, TopBar } from '@/components/ui';
-import type { Template } from '@/mock/data';
+import type { Template } from '@/types';
 import { useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 

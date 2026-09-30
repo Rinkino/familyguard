@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import type { Template } from '@/mock/data';
+import type { Template } from '@/types';
 import { space, type, useColors } from '@/theme';
 import { T } from './ui';
 

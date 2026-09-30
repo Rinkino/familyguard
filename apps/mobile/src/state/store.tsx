@@ -1,30 +1,23 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
-import { offset, type LatLng } from '@/lib/geo';
-import {
-  builtInTemplates,
-  discoverablePeople,
-  myMockCoord,
-  seedCircles,
-  seedCustomTemplates,
-  seedPeople,
-  seedZones,
-  type Circle,
-  type Me,
-  type Person,
-  type Template,
-  type Who,
-  type Zone,
-  type ZoneAlert,
-} from '@/mock/data';
+import * as Location from 'expo-location';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
+import { useAuth } from '@/lib/auth';
+import { distanceMeters, type LatLng } from '@/lib/geo';
+import { supabase } from '@/lib/supabase';
+import type { Circle, Me, Person, Template, Who, Zone, ZoneAlert } from '@/types';
 
-/** Demo speeds timers up: one "minute" of grace passes in one second. */
-export const DEMO_MINUTE_MS = 1000;
+/** Used for map centring until the first GPS fix: Yaba, Lagos. */
+const FALLBACK_COORD: LatLng = { latitude: 6.5095, longitude: 3.3711 };
 
-type State = {
-  signedIn: boolean;
-  onboarded: boolean;
+const SEND_EVERY_MS = 15_000;
+const SEND_EVERY_MS_SOS = 5_000;
+const SEND_MIN_MOVE_M = 25;
+const REFRESH_EVERY_MS = 20_000;
+
+type Data = {
+  loaded: boolean;
   me: Me;
-  myCoord: LatLng;
+  onboarded: boolean;
   pausedAll: boolean;
   templates: Template[];
   people: Person[];
@@ -33,202 +26,330 @@ type State = {
   alerts: ZoneAlert[];
 };
 
-type Action =
-  | { type: 'signIn'; email: string }
-  | { type: 'signOut' }
-  | { type: 'finishOnboarding'; name: string; tint: number }
-  | { type: 'setPausedAll'; value: boolean }
-  | { type: 'setShare'; personId: string; value: boolean }
-  | { type: 'setLabel'; personId: string; label: string; templateId?: string }
-  | { type: 'removePerson'; personId: string }
-  | { type: 'addPending'; person: Person }
-  | { type: 'saveTemplate'; template: Template }
-  | { type: 'deleteTemplate'; templateId: string }
-  | { type: 'saveCircle'; circle: Circle }
-  | { type: 'deleteCircle'; circleId: string }
-  | { type: 'toggleCircleMember'; circleId: string; personId: string }
-  | { type: 'saveZone'; zone: Zone }
-  | { type: 'endZone'; zoneId: string }
-  | { type: 'simulateLeave'; zoneId: string; now: number }
-  | { type: 'backInside'; alertId: string }
-  | { type: 'sayOk'; alertId: string }
-  | { type: 'sosNow'; alertId: string; now: number }
-  | { type: 'markSafe'; alertId: string }
-  | { type: 'dismissAlert'; alertId: string }
-  | { type: 'tick'; now: number }
-  | { type: 'reset' };
-
-const seedData = () => ({
-  myCoord: myMockCoord,
-  pausedAll: false,
-  templates: [...builtInTemplates, ...seedCustomTemplates],
-  people: seedPeople,
-  circles: seedCircles,
-  zones: seedZones(),
-  alerts: [] as ZoneAlert[],
-});
-
-const initial: State = {
-  signedIn: false,
+const empty: Data = {
+  loaded: false,
+  me: { id: '', name: '', email: '', tint: 0, inviteCode: '' },
   onboarded: false,
-  me: { name: '', email: '', tint: 0, inviteCode: 'KX7-42P' },
-  ...seedData(),
+  pausedAll: false,
+  templates: [],
+  people: [],
+  circles: [],
+  zones: [],
+  alerts: [],
 };
 
-function updatePerson(state: State, id: string, patch: Partial<Person>): State {
-  return { ...state, people: state.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) };
+type LocationState = {
+  myCoord: LatLng;
+  hasFix: boolean;
+  permission: 'unknown' | 'granted' | 'denied';
+};
+
+function need<T>(res: { data: T; error: { message: string } | null }): T {
+  if (res.error) throw new Error(res.error.message);
+  return res.data;
 }
 
-function moveWho(state: State, who: Who, coord: LatLng): State {
-  return who === 'me' ? { ...state, myCoord: coord } : updatePerson(state, who, { coord, lastSeen: 'just now' });
+async function loadData(userId: string, email: string): Promise<Data> {
+  const db = supabase!;
+  const toWho = (id: string): Who => (id === userId ? 'me' : id);
+
+  const [profile, templates, people, circles, members, zones, alerts] = await Promise.all([
+    db.from('profiles').select('display_name, tint, invite_code, sharing_paused').eq('id', userId).single(),
+    db.from('relationship_templates').select('id, owner_id, name, share_by_default').order('created_at'),
+    db.rpc('my_people'),
+    db.from('circles').select('id, name, share_with_circle').order('created_at'),
+    db.from('circle_members').select('circle_id, member_id'),
+    db.from('zones').select('*').eq('active', true).order('created_at'),
+    db
+      .from('alerts')
+      .select('*')
+      .or(`stage.neq.resolved,resolved_at.gt.${new Date(Date.now() - 6 * 3600_000).toISOString()}`)
+      .order('left_at', { ascending: false }),
+  ]);
+
+  const p = need(profile);
+  if (!p) throw new Error('Profile missing. Has the database migration been run?');
+  const memberRows = need(members) ?? [];
+
+  return {
+    loaded: true,
+    me: { id: userId, email, name: p.display_name ?? '', tint: p.tint, inviteCode: p.invite_code },
+    onboarded: Boolean(p.display_name),
+    pausedAll: p.sharing_paused,
+    templates: (need(templates) ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      builtIn: t.owner_id === null,
+      shareByDefault: t.share_by_default,
+    })),
+    people: ((need(people) ?? []) as any[])
+      .map((r) => ({
+        id: r.id as string,
+        name: (r.display_name as string) ?? 'New user',
+        tint: r.tint ?? 0,
+        label: r.label ?? '',
+        templateId: r.template_id ?? undefined,
+        iShare: Boolean(r.i_share),
+        theyShare: Boolean(r.they_share),
+        status: r.status as Person['status'],
+        coord: r.lat != null ? { latitude: r.lat, longitude: r.lng } : undefined,
+        locationAt: r.location_at ? Date.parse(r.location_at) : undefined,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    circles: (need(circles) ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      shareWithCircle: c.share_with_circle,
+      memberIds: memberRows.filter((m) => m.circle_id === c.id).map((m) => m.member_id),
+    })),
+    zones: (need(zones) ?? []).map((z) => ({
+      id: z.id,
+      name: z.name,
+      forId: toWho(z.for_user),
+      setById: toWho(z.created_by),
+      center: { latitude: z.center_lat, longitude: z.center_lng },
+      radiusM: z.radius_m,
+      endsAt: z.ends_at ? Date.parse(z.ends_at) : null,
+      graceMin: z.grace_min,
+      countdownS: z.countdown_s,
+      watcherIds: (z.watcher_ids as string[]).map(toWho),
+    })),
+    alerts: (need(alerts) ?? []).map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      zoneId: a.zone_id,
+      zoneName: a.zone_name,
+      forId: toWho(a.for_user),
+      watcherIds: (a.watcher_ids as string[]).map(toWho),
+      stage: a.stage,
+      countdownS: a.countdown_s,
+      leftAt: Date.parse(a.left_at),
+      stageEndsAt: a.stage_ends_at ? Date.parse(a.stage_ends_at) : null,
+      sosAt: a.sos_at ? Date.parse(a.sos_at) : undefined,
+      resolvedHow: a.resolved_how ?? undefined,
+      coord: a.lat != null ? { latitude: a.lat, longitude: a.lng } : undefined,
+    })),
+  };
 }
 
-function updateAlert(state: State, id: string, patch: Partial<ZoneAlert>): State {
-  return { ...state, alerts: state.alerts.map((a) => (a.id === id ? { ...a, ...patch } : a)) };
-}
+export type ZoneInput = Omit<Zone, 'id' | 'setById'> & { id?: string };
 
-function advance(state: State, now: number): State {
-  let changed = false;
-  const alerts = state.alerts.map((a) => {
-    if (a.stageEndsAt === null || now < a.stageEndsAt) return a;
-    const zone = state.zones.find((z) => z.id === a.zoneId);
-    changed = true;
-    if (a.stage === 'left') {
-      return { ...a, stage: 'checking' as const, stageEndsAt: now + (zone?.countdownS ?? 30) * 1000 };
-    }
-    return { ...a, stage: 'sos' as const, stageEndsAt: null, sosAt: now };
-  });
-  const zones = state.zones.filter((z) => z.endsAt === null || z.endsAt > now);
-  if (zones.length !== state.zones.length) changed = true;
-  return changed ? { ...state, alerts, zones } : state;
-}
+function useActions(data: Data, loc: LocationState, reload: () => Promise<void>, pretend: (c: LatLng) => Promise<void>) {
+  const db = supabase!;
+  const myId = data.me.id;
+  const fromWho = (w: Who) => (w === 'me' ? myId : w);
 
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case 'signIn':
-      return { ...state, signedIn: true, me: { ...state.me, email: action.email } };
-    case 'signOut':
-      return { ...initial };
-    case 'finishOnboarding':
-      return { ...state, onboarded: true, me: { ...state.me, name: action.name, tint: action.tint } };
-    case 'setPausedAll':
-      return { ...state, pausedAll: action.value };
-    case 'setShare':
-      return updatePerson(state, action.personId, { iShare: action.value });
-    case 'setLabel':
-      return updatePerson(state, action.personId, { label: action.label, templateId: action.templateId });
-    case 'removePerson':
-      return {
-        ...state,
-        people: state.people.filter((p) => p.id !== action.personId),
-        circles: state.circles.map((c) => ({ ...c, memberIds: c.memberIds.filter((m) => m !== action.personId) })),
-      };
-    case 'addPending':
-      return { ...state, people: [action.person, ...state.people] };
-    case 'saveTemplate': {
-      const exists = state.templates.some((t) => t.id === action.template.id);
-      const templates = exists
-        ? state.templates.map((t) => (t.id === action.template.id ? action.template : t))
-        : [...state.templates, action.template];
-      // Keep labels in sync when a template is renamed
-      const people = state.people.map((p) =>
-        p.templateId === action.template.id ? { ...p, label: action.template.name } : p
+  const run = async <T,>(p: PromiseLike<{ data: T; error: { message: string } | null }>) => {
+    const res = await p;
+    if (res.error) throw new Error(res.error.message);
+    await reload();
+    return res.data;
+  };
+
+  return {
+    saveProfile: (name: string, tint: number) =>
+      run(db.from('profiles').update({ display_name: name, tint }).eq('id', myId)),
+    setPausedAll: (value: boolean) => run(db.from('profiles').update({ sharing_paused: value }).eq('id', myId)),
+
+    setShare: (personId: string, value: boolean) =>
+      run(db.from('connections').update({ shares_location: value }).eq('owner_id', myId).eq('other_id', personId)),
+    setLabel: (personId: string, label: string, templateId?: string) =>
+      run(
+        db.from('connections').update({ label, template_id: templateId ?? null }).eq('owner_id', myId).eq('other_id', personId)
+      ),
+    removePerson: (personId: string) => run(db.rpc('remove_person', { other: personId })),
+
+    previewCode: async (code: string) => {
+      const { data: rows, error } = await db.rpc('preview_invite_code', { code });
+      if (error) throw new Error(error.message);
+      const row = (rows as any[])?.[0];
+      return row ? { id: row.id as string, name: (row.display_name as string) ?? 'New user', tint: row.tint as number } : null;
+    },
+    connect: (code: string, label: string, templateId: string | undefined, share: boolean) =>
+      run(db.rpc('connect_with_code', { code, label, template: templateId ?? null, share })),
+    accept: (otherId: string, label: string, templateId: string | undefined, share: boolean) =>
+      run(db.rpc('accept_request', { other: otherId, label, template: templateId ?? null, share })),
+
+    saveTemplate: async (t: { id?: string; name: string; shareByDefault: boolean }) => {
+      if (!t.id) {
+        return run(db.from('relationship_templates').insert({ owner_id: myId, name: t.name, share_by_default: t.shareByDefault }));
+      }
+      need(await db.from('relationship_templates').update({ name: t.name, share_by_default: t.shareByDefault }).eq('id', t.id));
+      // Renaming a label renames it for everyone you've given it to.
+      return run(db.from('connections').update({ label: t.name }).eq('owner_id', myId).eq('template_id', t.id));
+    },
+    deleteTemplate: (id: string) => run(db.from('relationship_templates').delete().eq('id', id)),
+
+    saveCircle: async (c: { id?: string; name: string; shareWithCircle: boolean }) => {
+      if (c.id) {
+        await run(db.from('circles').update({ name: c.name, share_with_circle: c.shareWithCircle }).eq('id', c.id));
+        return c.id;
+      }
+      const row = await run(
+        db.from('circles').insert({ owner_id: myId, name: c.name, share_with_circle: c.shareWithCircle }).select('id').single()
       );
-      return { ...state, templates, people };
-    }
-    case 'deleteTemplate':
-      return {
-        ...state,
-        templates: state.templates.filter((t) => t.id !== action.templateId),
-        // People keep their label text; it just becomes a custom label
-        people: state.people.map((p) => (p.templateId === action.templateId ? { ...p, templateId: undefined } : p)),
+      return (row as { id: string }).id;
+    },
+    deleteCircle: (id: string) => run(db.from('circles').delete().eq('id', id)),
+    toggleCircleMember: (circleId: string, personId: string) => {
+      const inCircle = data.circles.find((c) => c.id === circleId)?.memberIds.includes(personId);
+      return inCircle
+        ? run(db.from('circle_members').delete().eq('circle_id', circleId).eq('member_id', personId))
+        : run(db.from('circle_members').insert({ circle_id: circleId, member_id: personId }));
+    },
+
+    saveZone: (z: ZoneInput) => {
+      const row = {
+        name: z.name,
+        for_user: fromWho(z.forId),
+        center_lat: z.center.latitude,
+        center_lng: z.center.longitude,
+        radius_m: z.radiusM,
+        ends_at: z.endsAt ? new Date(z.endsAt).toISOString() : null,
+        grace_min: z.graceMin,
+        countdown_s: z.countdownS,
+        watcher_ids: z.watcherIds.map(fromWho).filter((w) => w !== fromWho(z.forId)),
       };
-    case 'saveCircle': {
-      const exists = state.circles.some((c) => c.id === action.circle.id);
-      return {
-        ...state,
-        circles: exists
-          ? state.circles.map((c) => (c.id === action.circle.id ? action.circle : c))
-          : [...state.circles, action.circle],
+      return z.id
+        ? run(db.from('zones').update(row).eq('id', z.id))
+        : run(db.from('zones').insert({ ...row, created_by: myId }));
+    },
+    endZone: (id: string) => run(db.from('zones').update({ active: false }).eq('id', id)),
+
+    answerOk: (alertId: string) => run(db.rpc('answer_ok', { alert: alertId })),
+    markSafe: (alertId: string) => run(db.rpc('mark_safe', { alert: alertId })),
+    sosNow: (alertId: string | null) =>
+      run(db.rpc('sos_now', { alert: alertId, lat: loc.myCoord.latitude, lng: loc.myCoord.longitude })) as Promise<string>,
+    advance: () => run(db.rpc('advance_alerts')),
+
+    /** Testing only: report a position outside a zone and hold it for 3 minutes. */
+    pretendLeave: (zone: Zone) => {
+      const outside = {
+        latitude: zone.center.latitude + ((zone.radiusM + 300) / 111_320),
+        longitude: zone.center.longitude,
       };
-    }
-    case 'deleteCircle':
-      return { ...state, circles: state.circles.filter((c) => c.id !== action.circleId) };
-    case 'toggleCircleMember':
-      return {
-        ...state,
-        circles: state.circles.map((c) => {
-          if (c.id !== action.circleId) return c;
-          const has = c.memberIds.includes(action.personId);
-          return {
-            ...c,
-            memberIds: has ? c.memberIds.filter((m) => m !== action.personId) : [...c.memberIds, action.personId],
-          };
-        }),
-      };
-    case 'saveZone': {
-      const exists = state.zones.some((z) => z.id === action.zone.id);
-      return {
-        ...state,
-        zones: exists ? state.zones.map((z) => (z.id === action.zone.id ? action.zone : z)) : [...state.zones, action.zone],
-      };
-    }
-    case 'endZone':
-      return {
-        ...state,
-        zones: state.zones.filter((z) => z.id !== action.zoneId),
-        alerts: state.alerts.filter((a) => a.zoneId !== action.zoneId),
-      };
-    case 'simulateLeave': {
-      const zone = state.zones.find((z) => z.id === action.zoneId);
-      if (!zone || state.alerts.some((a) => a.zoneId === zone.id && a.stage !== 'resolved')) return state;
-      const moved = moveWho(state, zone.forId, offset(zone.center, zone.radiusM + 350, 60));
-      const alert: ZoneAlert = {
-        id: `a-${action.now}`,
-        zoneId: zone.id,
-        forId: zone.forId,
-        stage: 'left',
-        leftAt: action.now,
-        stageEndsAt: action.now + zone.graceMin * DEMO_MINUTE_MS,
-      };
-      return { ...moved, alerts: [alert, ...state.alerts.filter((a) => a.zoneId !== zone.id)] };
-    }
-    case 'backInside': {
-      const alert = state.alerts.find((a) => a.id === action.alertId);
-      const zone = state.zones.find((z) => z.id === alert?.zoneId);
-      if (!alert || !zone) return state;
-      const moved = moveWho(state, zone.forId, offset(zone.center, zone.radiusM * 0.3, 200));
-      return updateAlert(moved, alert.id, { stage: 'resolved', stageEndsAt: null, resolvedHow: 'back-inside' });
-    }
-    case 'sayOk':
-      return updateAlert(state, action.alertId, { stage: 'resolved', stageEndsAt: null, resolvedHow: 'said-ok' });
-    case 'sosNow':
-      return updateAlert(state, action.alertId, { stage: 'sos', stageEndsAt: null, sosAt: action.now });
-    case 'markSafe':
-      return updateAlert(state, action.alertId, { stage: 'resolved', stageEndsAt: null, resolvedHow: 'marked-safe' });
-    case 'dismissAlert':
-      return { ...state, alerts: state.alerts.filter((a) => a.id !== action.alertId) };
-    case 'tick':
-      return advance(state, action.now);
-    case 'reset':
-      return { ...state, ...seedData() };
-  }
+      return pretend(outside);
+    },
+  };
 }
 
-type Store = State & { dispatch: React.Dispatch<Action> };
+type Store = Data &
+  LocationState & {
+    refresh: () => Promise<void>;
+    actions: ReturnType<typeof useActions>;
+  };
 
 const StoreContext = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initial);
-  const value = useMemo(() => ({ ...state, dispatch }), [state]);
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  const email = session?.user.email ?? '';
+  const [data, setData] = useState<Data>(empty);
+  const [loc, setLoc] = useState<LocationState>({ myCoord: FALLBACK_COORD, hasFix: false, permission: 'unknown' });
 
-  // Drives alert stages and zone expiry. The reducer returns the same state
-  // when nothing changed, so idle ticks don't re-render.
+  const reload = useCallback(async () => {
+    if (!userId || !supabase) return;
+    try {
+      setData(await loadData(userId, email));
+    } catch (e) {
+      console.warn('Failed to load data', e);
+    }
+  }, [userId, email]);
+
+  // Initial load, periodic refresh, refresh on foreground, and live changes.
   useEffect(() => {
-    const id = setInterval(() => dispatch({ type: 'tick', now: Date.now() }), 1000);
-    return () => clearInterval(id);
-  }, []);
+    if (!userId || !supabase) {
+      setData(empty);
+      return;
+    }
+    reload();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const soon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(reload, 300);
+    };
+    const channel = supabase
+      .channel(`app-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, soon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, soon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'zones' }, soon)
+      .subscribe();
+    const interval = setInterval(reload, REFRESH_EVERY_MS);
+    const sub = AppState.addEventListener('change', (s) => s === 'active' && reload());
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      sub.remove();
+      supabase?.removeChannel(channel);
+    };
+  }, [userId, reload]);
+
+  // Location sharing while the app is open.
+  const lastSent = useRef<{ at: number; coord: LatLng } | null>(null);
+  const holdUntil = useRef(0);
+  const inSos = data.alerts.some((a) => a.forId === 'me' && a.stage === 'sos');
+
+  const send = useCallback(
+    async (coord: LatLng, accuracy: number | null, force = false) => {
+      if (!userId || !supabase) return;
+      const now = Date.now();
+      const last = lastSent.current;
+      const every = inSos ? SEND_EVERY_MS_SOS : SEND_EVERY_MS;
+      if (!force && last && now - last.at < every && distanceMeters(last.coord, coord) < SEND_MIN_MOVE_M) return;
+      lastSent.current = { at: now, coord };
+      const { error } = await supabase.from('user_locations').upsert({
+        user_id: userId,
+        lat: coord.latitude,
+        lng: coord.longitude,
+        accuracy_m: accuracy,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) console.warn('Location upload failed', error.message);
+    },
+    [userId, inSos]
+  );
+
+  useEffect(() => {
+    if (!userId || !data.onboarded) return;
+    let watcher: Location.LocationSubscription | undefined;
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (cancelled) return;
+      if (status !== 'granted') {
+        setLoc((l) => ({ ...l, permission: 'denied' }));
+        return;
+      }
+      setLoc((l) => ({ ...l, permission: 'granted' }));
+      watcher = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, timeInterval: SEND_EVERY_MS_SOS, distanceInterval: 10 },
+        (pos) => {
+          const coord = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          if (Date.now() < holdUntil.current) return; // a test position is being held
+          setLoc((l) => ({ ...l, myCoord: coord, hasFix: true }));
+          send(coord, pos.coords.accuracy ?? null);
+        }
+      );
+    })();
+    return () => {
+      cancelled = true;
+      watcher?.remove();
+    };
+  }, [userId, data.onboarded, send]);
+
+  const pretend = useCallback(
+    async (coord: LatLng) => {
+      holdUntil.current = Date.now() + 3 * 60_000;
+      setLoc((l) => ({ ...l, myCoord: coord }));
+      await send(coord, null, true);
+      await reload();
+    },
+    [send, reload]
+  );
+
+  const actions = useActions(data, loc, reload, pretend);
+  const value = useMemo(() => ({ ...data, ...loc, refresh: reload, actions }), [data, loc, reload, actions]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 
@@ -238,23 +359,15 @@ export function useStore(): Store {
   return store;
 }
 
-/** Circles that share my location with this person. */
+/** Circles of mine that share my location with this person. */
 export function sharingCircles(circles: Circle[], personId: string): Circle[] {
   return circles.filter((c) => c.shareWithCircle && c.memberIds.includes(personId));
 }
 
 /** Whether this person can actually see me, after circles and the global pause. */
-export function effectiveShare(state: Pick<State, 'circles' | 'pausedAll'>, person: Person): boolean {
+export function effectiveShare(state: Pick<Store, 'circles' | 'pausedAll'>, person: Person): boolean {
   if (state.pausedAll || person.status !== 'connected') return false;
   return person.iShare || sharingCircles(state.circles, person.id).length > 0;
-}
-
-/** Mock lookup for an invite code. Any code of 6+ characters finds someone. */
-export function lookupInviteCode(code: string) {
-  const clean = code.replace(/[^a-z0-9]/gi, '');
-  if (clean.length < 6) return null;
-  const sum = [...clean].reduce((n, ch) => n + ch.charCodeAt(0), 0);
-  return discoverablePeople[sum % discoverablePeople.length];
 }
 
 export function firstName(name: string) {
@@ -293,4 +406,13 @@ export function formatRemaining(ms: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h} h ${m} min` : `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+export function formatAgo(ms: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
 }
