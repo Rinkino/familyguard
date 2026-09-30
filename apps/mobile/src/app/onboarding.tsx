@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Field, Screen, T } from '@/components/ui';
+import { nameFromSession, useAuth } from '@/lib/auth';
 import { useStore } from '@/state/store';
 import { avatarTints, space, useColors } from '@/theme';
 
 export default function Onboarding() {
   const c = useColors();
   const { dispatch } = useStore();
+  const { session } = useAuth();
   const [step, setStep] = useState<'name' | 'lines'>('name');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => nameFromSession(session));
   const [tint, setTint] = useState(0);
 
   if (step === 'name') {

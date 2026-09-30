@@ -11,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { StoreProvider, useStore } from '@/state/store';
 import { useColors } from '@/theme';
 
@@ -25,29 +26,45 @@ export default function RootLayout() {
     SchibstedGrotesk_800ExtraBold,
   });
 
-  useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
-  }, [loaded]);
-
   if (!loaded) return null;
 
   return (
-    <StoreProvider>
-      <RootStack />
-    </StoreProvider>
+    <AuthProvider>
+      <StoreProvider>
+        <RootStack />
+      </StoreProvider>
+    </AuthProvider>
   );
 }
 
 function RootStack() {
-  const { signedIn, onboarded, alerts } = useStore();
+  const auth = useAuth();
+  const store = useStore();
+  const { onboarded, alerts, dispatch } = store;
   const c = useColors();
   const scheme = useColorScheme();
+
+  // With Supabase configured, the real session decides who is signed in.
+  const signedIn = auth.enabled ? Boolean(auth.session) : store.signedIn;
+  const email = auth.session?.user.email;
+
+  useEffect(() => {
+    if (auth.ready) SplashScreen.hideAsync();
+  }, [auth.ready]);
+
+  useEffect(() => {
+    if (!auth.enabled) return;
+    if (email && !store.signedIn) dispatch({ type: 'signIn', email });
+    if (!auth.session && store.signedIn) dispatch({ type: 'signOut' });
+  }, [auth.enabled, auth.session, email, store.signedIn, dispatch]);
 
   // When you're asked "Are you OK?", take over the screen wherever you are.
   const myChecking = alerts.find((a) => a.forId === 'me' && a.stage === 'checking')?.id;
   useEffect(() => {
     if (myChecking && signedIn && onboarded) router.push('/check-in');
   }, [myChecking, signedIn, onboarded]);
+
+  if (!auth.ready) return null;
 
   return (
     <>

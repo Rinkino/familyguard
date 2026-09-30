@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
 import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, confirm } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
 import { useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function You() {
   const c = useColors();
   const store = useStore();
+  const auth = useAuth();
   const custom = store.templates.filter((t) => !t.builtIn).length;
 
   return (
@@ -47,7 +49,12 @@ export default function You() {
         <Button
           kind="secondary"
           label="Sign out"
-          onPress={() => confirm('Sign out?', 'You can sign back in any time.', 'Sign out', () => store.dispatch({ type: 'signOut' }))}
+          onPress={() =>
+            confirm('Sign out?', 'You can sign back in any time.', 'Sign out', async () => {
+              await auth.signOut();
+              store.dispatch({ type: 'signOut' });
+            })
+          }
         />
       </View>
     </Screen>

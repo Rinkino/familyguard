@@ -1,21 +1,52 @@
 import { FontAwesome } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Platform, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Field, Screen, T } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
 import { useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
-// Sign-in is simulated until Supabase auth is wired up.
+// Real sign-in (Google + email link) when Supabase is configured; simulated otherwise.
 export default function SignIn() {
   const c = useColors();
+  const auth = useAuth();
   const { dispatch } = useStore();
   const [emailMode, setEmailMode] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState<'google' | 'email' | null>(null);
+  const [error, setError] = useState('');
 
-  const signIn = (address: string) => dispatch({ type: 'signIn', email: address });
+  const demoSignIn = (address: string) => dispatch({ type: 'signIn', email: address });
   const validEmail = /\S+@\S+\.\S+/.test(email);
+
+  const google = async () => {
+    if (!auth.enabled) return demoSignIn('you@gmail.com');
+    setError('');
+    setBusy('google');
+    try {
+      await auth.signInWithGoogle();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Google sign-in failed. Try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sendLink = async () => {
+    if (!auth.enabled) return setSent(true);
+    setError('');
+    setBusy('email');
+    try {
+      await auth.sendMagicLink(email.trim());
+      setSent(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't send the link. Check the address and try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <Screen>
@@ -34,21 +65,23 @@ export default function SignIn() {
       <View style={{ gap: space.sm, marginTop: space.xl }}>
         {!emailMode ? (
           <>
-            {Platform.OS !== 'android' && (
+            {/* Apple needs a paid Apple Developer account; demo mode only for now. */}
+            {!auth.enabled && Platform.OS !== 'android' && (
               <Button
                 kind="ink"
                 label="Continue with Apple"
                 icon={<FontAwesome name="apple" size={18} color={c.bg} />}
-                onPress={() => signIn('you@icloud.com')}
+                onPress={() => demoSignIn('you@icloud.com')}
               />
             )}
             <Button
               kind="secondary"
               label="Continue with Google"
-              icon={<FontAwesome name="google" size={16} color={c.ink} />}
-              onPress={() => signIn('you@gmail.com')}
+              disabled={busy !== null}
+              icon={busy === 'google' ? <ActivityIndicator color={c.ink} /> : <FontAwesome name="google" size={16} color={c.ink} />}
+              onPress={google}
             />
-            <Button kind="plain" label="Use email instead" onPress={() => setEmailMode(true)} />
+            <Button kind="plain" label="Use email instead" onPress={() => { setError(''); setEmailMode(true); }} />
           </>
         ) : !sent ? (
           <>
@@ -62,8 +95,13 @@ export default function SignIn() {
               autoComplete="email"
               autoFocus
             />
-            <Button label="Send sign-in link" disabled={!validEmail} onPress={() => setSent(true)} style={{ marginTop: space.sm }} />
-            <Button kind="plain" label="Back" onPress={() => setEmailMode(false)} />
+            <Button
+              label={busy === 'email' ? 'Sending…' : 'Send sign-in link'}
+              disabled={!validEmail || busy !== null}
+              onPress={sendLink}
+              style={{ marginTop: space.sm }}
+            />
+            <Button kind="plain" label="Back" onPress={() => { setError(''); setEmailMode(false); }} />
           </>
         ) : (
           <>
@@ -71,15 +109,21 @@ export default function SignIn() {
             <T v="body" color={c.muted}>
               We sent a sign-in link to {email}. Open it on this phone to continue.
             </T>
-            <Button label="Open link (demo)" onPress={() => signIn(email)} style={{ marginTop: space.md }} />
+            {!auth.enabled && (
+              <Button label="Open link (demo)" onPress={() => demoSignIn(email)} style={{ marginTop: space.md }} />
+            )}
             <Button kind="plain" label="Use a different email" onPress={() => setSent(false)} />
           </>
         )}
+
+        {error ? <T v="small" color={c.flare} style={{ textAlign: 'center' }}>{error}</T> : null}
       </View>
 
-      <T v="tiny" color={c.muted} style={{ textAlign: 'center', marginTop: space.lg }}>
-        Demo build. Sign-in is simulated and no data leaves this device.
-      </T>
+      {!auth.enabled && (
+        <T v="tiny" color={c.muted} style={{ textAlign: 'center', marginTop: space.lg }}>
+          Demo build. Sign-in is simulated and no data leaves this device.
+        </T>
+      )}
     </Screen>
   );
 }
