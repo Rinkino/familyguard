@@ -124,7 +124,7 @@ export function Button({
     secondary: { bg: c.surface, fg: c.ink, border: c.hairline },
     ink: { bg: c.ink, fg: c.bg, border: c.ink },
     danger: { bg: 'transparent', fg: c.flare, border: 'transparent' },
-    plain: { bg: 'transparent', fg: c.beacon, border: 'transparent' },
+    plain: { bg: 'transparent', fg: c.beaconText, border: 'transparent' },
   }[kind];
   return (
     <Pressable

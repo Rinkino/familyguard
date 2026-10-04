@@ -1,17 +1,18 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { useColors } from '@/theme';
+
+// The logo keeps its own brand green, independent of the app's accent colour.
+const BRAND = { tile: '#2F6B4F', child: '#BFE3CF', childOnLight: '#7FB79A' };
 
 /**
  * FamilyGuard mark: a sheltering arc over a parent holding a child's hand.
  * Same geometry as assets/brand/make.sh (1024 grid).
  */
 export function Logo({ size = 48, tile = true }: { size?: number; tile?: boolean }) {
-  const c = useColors();
-  const parent = tile ? '#FFFFFF' : c.beacon;
-  const child = tile ? '#BFE3CF' : c.moss;
+  const parent = tile ? '#FFFFFF' : BRAND.tile;
+  const child = tile ? BRAND.child : BRAND.childOnLight;
   return (
     <Svg width={size} height={size} viewBox="0 0 1024 1024" accessibilityLabel="FamilyGuard">
-      {tile && <Rect width={1024} height={1024} rx={230} fill={c.beacon} />}
+      {tile && <Rect width={1024} height={1024} rx={230} fill={BRAND.tile} />}
       <Path d="M277 685.5 A250 250 0 1 1 747 685.5" fill="none" stroke={parent} strokeWidth={80} strokeLinecap="round" />
       <Path
         d="M440 532 V624 M440 624 L410 706 M440 624 L470 706 M440 560 L408 632 M440 560 L516 634"

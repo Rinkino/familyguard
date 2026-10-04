@@ -38,7 +38,7 @@ export function BondLine({
 
   return (
     <View accessible accessibilityLabel={label} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-      {dots && <Dot size={dot} color={iShare ? c.beacon : c.moss} />}
+      {dots && <Dot size={dot} color={iShare ? c.beaconText : c.moss} />}
       <Animated.View
         style={{
           flex: 1,
@@ -48,11 +48,11 @@ export function BondLine({
           transformOrigin: 'left',
         }}
       >
-        <Segment on={iShare} thickness={thickness} color={c.beacon} off={c.moss} />
+        <Segment on={iShare} thickness={thickness} color={c.beaconText} off={c.moss} />
         <View style={{ width: thickness * 2 }} />
-        <Segment on={theyShare} thickness={thickness} color={c.beacon} off={c.moss} />
+        <Segment on={theyShare} thickness={thickness} color={c.beaconText} off={c.moss} />
       </Animated.View>
-      {dots && <Dot size={dot} color={theyShare ? c.beacon : c.moss} />}
+      {dots && <Dot size={dot} color={theyShare ? c.beaconText : c.moss} />}
     </View>
   );
 }

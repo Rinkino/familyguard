@@ -23,7 +23,7 @@ function Terms({ guardian, dependent, you }: { guardian: string; dependent: stri
     <View style={{ backgroundColor: c.surface, borderRadius: 18, padding: space.md, gap: space.md, marginTop: space.lg }}>
       {lines.map((line) => (
         <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-          <Feather name="check" size={16} color={c.beacon} style={{ marginTop: 3 }} />
+          <Feather name="check" size={16} color={c.beaconText} style={{ marginTop: 3 }} />
           <T v="body" style={{ flex: 1 }}>{line}</T>
         </View>
       ))}

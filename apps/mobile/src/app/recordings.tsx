@@ -57,7 +57,7 @@ export default function Recordings() {
       {error ? (
         <T v="body" color={c.flare} style={{ marginTop: space.lg }}>Couldn't load recordings: {error}</T>
       ) : !groups ? (
-        <ActivityIndicator color={c.beacon} style={{ marginTop: space.xl }} />
+        <ActivityIndicator color={c.beaconText} style={{ marginTop: space.xl }} />
       ) : groups.length === 0 ? (
         <View style={{ marginTop: space.xl, gap: space.sm }}>
           <T v="heading">No recordings</T>

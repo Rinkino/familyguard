@@ -62,7 +62,7 @@ export default function PersonDetail() {
         <T v="body" color={c.muted}>You call them {person.label}</T>
         {(theyGuardMe || iGuardThem) && (
           <View style={{ marginTop: space.sm, paddingHorizontal: space.md, paddingVertical: 4, borderRadius: 12, backgroundColor: c.beaconSoft }}>
-            <T v="smallStrong" color={c.beacon}>{iGuardThem ? `You're ${name}'s guardian` : `${name} is your guardian`}</T>
+            <T v="smallStrong" color={c.beaconText}>{iGuardThem ? `You're ${name}'s guardian` : `${name} is your guardian`}</T>
           </View>
         )}
       </View>
@@ -106,7 +106,7 @@ export default function PersonDetail() {
                   : `Not right now. Only ${name} can change this.`}
               </T>
             </View>
-            <Icon name={person.theyShare ? 'eye' : 'eye-off'} color={person.theyShare ? c.beacon : c.moss} />
+            <Icon name={person.theyShare ? 'eye' : 'eye-off'} color={person.theyShare ? c.beaconText : c.moss} />
           </Row>
         </Section>
       )}
@@ -115,7 +115,7 @@ export default function PersonDetail() {
         <Section title="Parent and child agreement">
           <Row last onPress={() => router.push(`/guardian/${person.id}`)}>
             <T v="body" style={{ flex: 1 }}>{agreementText}</T>
-            <T v="smallStrong" color={c.beacon}>{g ? 'View' : 'Set up'}</T>
+            <T v="smallStrong" color={c.beaconText}>{g ? 'View' : 'Set up'}</T>
           </Row>
         </Section>
       )}
@@ -123,7 +123,7 @@ export default function PersonDetail() {
       <Section title="Your label" note={`Only you see this. ${name} picks their own label for you.`}>
         <Row last onPress={() => router.push(`/label/${person.id}`)}>
           <T v="body" style={{ flex: 1 }}>{person.label}</T>
-          <T v="smallStrong" color={c.beacon}>Change</T>
+          <T v="smallStrong" color={c.beaconText}>Change</T>
         </Row>
       </Section>
 

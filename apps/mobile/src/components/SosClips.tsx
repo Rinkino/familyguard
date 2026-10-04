@@ -27,7 +27,7 @@ export function SosClips({ alertId, name, live = false }: { alertId: string; nam
   }, [alertId, live]);
 
   if (error) return <T v="small" color={c.flare}>Couldn't load audio: {error}</T>;
-  if (!clips) return <ActivityIndicator color={c.beacon} />;
+  if (!clips) return <ActivityIndicator color={c.beaconText} />;
   if (clips.length === 0) {
     return <T v="small" color={c.muted}>{live ? 'No audio yet. Clips arrive every 30 seconds while recording.' : 'No audio.'}</T>;
   }
@@ -91,7 +91,7 @@ function ClipRow({ clip, index, last, name }: { clip: Clip; index: number; last:
       </View>
       {Platform.OS !== 'web' && (
         <Pressable accessibilityRole="button" accessibilityLabel={`Save clip ${index} to phone`} onPress={save} disabled={saving} hitSlop={8}>
-          {saving ? <ActivityIndicator color={c.beacon} /> : <Feather name="download" size={20} color={c.beacon} />}
+          {saving ? <ActivityIndicator color={c.beaconText} /> : <Feather name="download" size={20} color={c.beaconText} />}
         </Pressable>
       )}
     </View>

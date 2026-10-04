@@ -65,7 +65,7 @@ export default function People() {
                 <T v="bodyStrong">{p.name}</T>
                 <T v="small" color={c.muted}>Tap to accept and choose what to share.</T>
               </View>
-              <T v="smallStrong" color={c.beacon}>Accept</T>
+              <T v="smallStrong" color={c.beaconText}>Accept</T>
             </Row>
           ))}
         </Section>
@@ -86,7 +86,7 @@ export default function People() {
                       : 'Wants to be your guardian'}
                 </T>
               </View>
-              <T v="smallStrong" color={c.beacon}>Review</T>
+              <T v="smallStrong" color={c.beaconText}>Review</T>
             </Row>
           ))}
         </Section>

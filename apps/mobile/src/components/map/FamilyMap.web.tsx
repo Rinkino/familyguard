@@ -71,7 +71,7 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
                     r={z.radiusM / mpp}
                     stroke={z.alert ? c.flare : c.beacon}
                     strokeWidth={2}
-                    fill={z.alert ? 'rgba(228,87,46,0.12)' : 'rgba(47,107,79,0.12)'}
+                    fill={z.alert ? 'rgba(228,87,46,0.12)' : 'rgba(242,183,5,0.18)'}
                     onPress={onPressZone ? () => onPressZone(z.id) : undefined}
                   />
                 );

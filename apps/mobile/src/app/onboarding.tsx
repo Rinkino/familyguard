@@ -172,9 +172,9 @@ function PermissionCard({
   return (
     <View style={{ backgroundColor: c.surface, borderRadius: 18, padding: space.md, gap: space.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Icon name={icon} color={c.beacon} />
+        <Icon name={icon} color={c.beaconText} />
         <T v="bodyStrong" style={{ flex: 1 }}>{title}</T>
-        {status === 'granted' && <Icon name="check-circle" color={c.beacon} />}
+        {status === 'granted' && <Icon name="check-circle" color={c.beaconText} />}
       </View>
       <T v="small" color={c.muted}>{body}</T>
       {status === 'unknown' && <Button kind="secondary" label={`Allow ${title.toLowerCase()}`} onPress={onAllow} />}

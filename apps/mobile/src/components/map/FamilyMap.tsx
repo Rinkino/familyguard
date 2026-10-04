@@ -59,7 +59,7 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
           radius={z.radiusM}
           strokeWidth={2}
           strokeColor={z.alert ? c.flare : c.beacon}
-          fillColor={z.alert ? 'rgba(228,87,46,0.12)' : 'rgba(47,107,79,0.12)'}
+          fillColor={z.alert ? 'rgba(228,87,46,0.12)' : 'rgba(242,183,5,0.18)'}
         />
       ))}
 

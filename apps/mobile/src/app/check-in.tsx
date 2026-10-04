@@ -104,9 +104,9 @@ export default function CheckIn() {
 
   // SOS
   return (
-    <View style={{ flex: 1, backgroundColor: '#14231E', paddingHorizontal: space.lg, paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.lg }}>
+    <View style={{ flex: 1, backgroundColor: '#1A1814', paddingHorizontal: space.lg, paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.lg }}>
       <T v="title" color="#FFFFFF">SOS sent</T>
-      <T v="body" color="#C9D6CF" style={{ marginTop: space.sm }}>
+      <T v="body" color="#D4CFC2" style={{ marginTop: space.sm }}>
         {watcherText} can see where you are. Keep this screen open so your location and audio keep reaching them.
       </T>
 
@@ -150,13 +150,13 @@ function Recording({ since, now, chunks }: { since: number; now: number; chunks:
       <View
         accessible
         accessibilityLabel={`Recording audio, ${elapsed}`}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, backgroundColor: '#1F3129', borderRadius: 20, padding: space.lg }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, backgroundColor: '#2A2620', borderRadius: 20, padding: space.lg }}
       >
         <Animated.View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#F0714D', opacity: pulse }} />
         <T v="bodyStrong" color="#FFFFFF" style={{ flex: 1 }}>Recording audio</T>
         <T v="heading" color="#FFFFFF" style={{ fontVariant: ['tabular-nums'] }}>{elapsed}</T>
       </View>
-      <T v="small" color="#C9D6CF">
+      <T v="small" color="#D4CFC2">
         {chunks === 0 ? 'First clip uploads after 30 seconds.' : `${chunks} ${chunks === 1 ? 'clip' : 'clips'} sent to your watchers.`}
       </T>
     </View>

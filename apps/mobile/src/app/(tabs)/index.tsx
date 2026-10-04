@@ -177,7 +177,7 @@ export default function MapScreen() {
               style={[type.body, { flex: 1, color: c.ink, height: 52 }, Platform.OS === 'web' && ({ outlineStyle: 'none' } as never)]}
             />
             {searching ? (
-              <ActivityIndicator color={c.beacon} />
+              <ActivityIndicator color={c.beaconText} />
             ) : query ? (
               <Pressable accessibilityLabel="Clear search" onPress={() => setQuery('')} hitSlop={10}>
                 <Feather name="x" size={18} color={c.muted} />
@@ -194,7 +194,7 @@ export default function MapScreen() {
               ) : (
                 results.map((p, i) => (
                   <Row key={p.id} last={i === results.length - 1} onPress={() => choose(p)}>
-                    <Feather name="map-pin" size={18} color={c.beacon} />
+                    <Feather name="map-pin" size={18} color={c.beaconText} />
                     <View style={{ flex: 1 }}>
                       <T v="bodyStrong" numberOfLines={1}>{p.name}</T>
                       <T v="small" color={c.muted} numberOfLines={1}>{p.address}</T>
@@ -276,7 +276,7 @@ export default function MapScreen() {
                       ))}
                     </View>
                     {routeState === 'loading' ? (
-                      <ActivityIndicator color={c.beacon} style={{ marginVertical: space.md }} />
+                      <ActivityIndicator color={c.beaconText} style={{ marginVertical: space.md }} />
                     ) : routeState === 'error' ? (
                       <T v="small" color={c.flare}>Couldn't find a route. Try another way of travelling.</T>
                     ) : route ? (
@@ -319,7 +319,7 @@ export default function MapScreen() {
                       }
                       hitSlop={10}
                     >
-                      <T v="smallStrong" color={c.beacon}>New zone</T>
+                      <T v="smallStrong" color={c.beaconText}>New zone</T>
                     </Pressable>
                   </View>
                   {zoneRows.length === 0 ? (

@@ -31,7 +31,7 @@ export default function RecordingDetail() {
     return (
       <Screen>
         <TopBar />
-        {error ? <T v="body" color={c.flare}>{error}</T> : <ActivityIndicator color={c.beacon} style={{ marginTop: space.xl }} />}
+        {error ? <T v="body" color={c.flare}>{error}</T> : <ActivityIndicator color={c.beaconText} style={{ marginTop: space.xl }} />}
       </Screen>
     );
   }

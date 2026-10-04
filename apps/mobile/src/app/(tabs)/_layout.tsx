@@ -9,7 +9,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         sceneStyle: { backgroundColor: c.bg },
-        tabBarActiveTintColor: c.beacon,
+        tabBarActiveTintColor: c.beaconText,
         tabBarInactiveTintColor: c.muted,
         tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.hairline },
         tabBarLabelStyle: { fontFamily: fonts.semibold, fontSize: 12 },

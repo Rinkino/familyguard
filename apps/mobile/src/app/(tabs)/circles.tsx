@@ -54,8 +54,8 @@ export default function Circles() {
                   </View>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                  <Feather name={circle.shareWithCircle ? 'eye' : 'eye-off'} size={18} color={circle.shareWithCircle ? c.beacon : c.moss} />
-                  <T v="tiny" color={circle.shareWithCircle ? c.beacon : c.muted}>
+                  <Feather name={circle.shareWithCircle ? 'eye' : 'eye-off'} size={18} color={circle.shareWithCircle ? c.beaconText : c.moss} />
+                  <T v="tiny" color={circle.shareWithCircle ? c.beaconText : c.muted}>
                     {circle.shareWithCircle ? 'Sharing' : 'Not sharing'}
                   </T>
                 </View>

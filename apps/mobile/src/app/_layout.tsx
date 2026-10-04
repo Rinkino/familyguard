@@ -64,7 +64,7 @@ function RootStack() {
   if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={c.beacon} />
+        <ActivityIndicator color={c.beaconText} />
       </View>
     );
   }
