@@ -8,6 +8,7 @@ import { FamilyMap } from '@/components/map/FamilyMap';
 import type { FamilyMapHandle, MapPerson } from '@/components/map/types';
 import { Avatar, Button, Row, T, attempt } from '@/components/ui';
 import { distanceMeters, formatDistance, formatDuration, type LatLng } from '@/lib/geo';
+import { flags } from '@/lib/flags';
 import { addressAt, getRoute, hasMapboxToken, searchPlaces, type Place, type Route, type TravelMode } from '@/lib/mapbox';
 import { activeAlerts, firstName, formatRemaining, useNow, useStore, whoName } from '@/state/store';
 import { space, type, useColors } from '@/theme';
@@ -36,6 +37,14 @@ export default function MapScreen() {
   const [routeState, setRouteState] = useState<'idle' | 'loading' | 'error'>('idle');
 
   const alerts = activeAlerts(store.alerts);
+
+  // Right after onboarding, offer to add the first person once.
+  useEffect(() => {
+    if (flags.offerAddPerson && store.loaded && store.people.length === 0) {
+      flags.offerAddPerson = false;
+      router.push('/add-person');
+    }
+  }, [store.loaded, store.people.length]);
   const alertFor = new Set(alerts.map((a) => a.forId));
   const zoneAlert = new Set(alerts.map((a) => a.zoneId));
 
