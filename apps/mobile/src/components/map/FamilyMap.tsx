@@ -121,7 +121,7 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
 
       {people.map((p) => (
         <Marker key={p.id} coordinate={p.coord} anchor={{ x: 0.5, y: 0.5 }} onPress={() => onPressPerson?.(p.id)}>
-          <View style={{ padding: 3, borderRadius: 24, backgroundColor: p.alert ? c.flare : '#FFFFFF' }}>
+          <View style={{ padding: 3, borderRadius: 24, backgroundColor: p.alert ? c.flare : '#FFFFFF', opacity: p.stale ? 0.5 : 1 }}>
             <Avatar name={p.name} tint={p.tint} size={34} />
           </View>
         </Marker>

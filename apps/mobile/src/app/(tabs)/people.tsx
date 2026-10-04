@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Row, Screen, Section, T } from '@/components/ui';
 import { distanceMeters, formatDistance } from '@/lib/geo';
-import { effectiveShare, firstName, formatAgo, guardsMe, iGuard, useStore } from '@/state/store';
+import { effectiveShare, firstName, formatAgo, guardsMe, iGuard, isOffline, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function People() {
@@ -126,7 +126,9 @@ export default function People() {
                     {!p.theyShare
                       ? 'Location not shared with you'
                       : p.coord && p.locationAt
-                        ? `${formatDistance(distanceMeters(store.myCoord, p.coord))} away, ${formatAgo(p.locationAt)}`
+                        ? isOffline(p.locationAt)
+                          ? `Offline since ${new Date(p.locationAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Last seen ${formatDistance(distanceMeters(store.myCoord, p.coord))} away.`
+                          : `${formatDistance(distanceMeters(store.myCoord, p.coord))} away, ${formatAgo(p.locationAt)}`
                         : 'Sharing, waiting for first location'}
                   </T>
                 </View>

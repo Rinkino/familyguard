@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { AppState } from 'react-native';
 import { useAuth } from '@/lib/auth';
 import { distanceMeters, type LatLng } from '@/lib/geo';
+import { sendPoint } from '@/lib/locationQueue';
 import { supabase } from '@/lib/supabase';
 import type { Circle, Me, Person, Template, Who, Zone, ZoneAlert } from '@/types';
 
@@ -42,6 +43,8 @@ type LocationState = {
   myCoord: LatLng;
   hasFix: boolean;
   permission: 'unknown' | 'granted' | 'denied';
+  /** Points saved on the phone while offline, waiting to upload. */
+  queued: number;
 };
 
 function need<T>(res: { data: T; error: { message: string } | null }): T {
@@ -278,7 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id;
   const email = session?.user.email ?? '';
   const [data, setData] = useState<Data>(empty);
-  const [loc, setLoc] = useState<LocationState>({ myCoord: FALLBACK_COORD, hasFix: false, permission: 'unknown' });
+  const [loc, setLoc] = useState<LocationState>({ myCoord: FALLBACK_COORD, hasFix: false, permission: 'unknown', queued: 0 });
 
   const reload = useCallback(async () => {
     if (!userId || !supabase) return;
@@ -331,14 +334,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const every = inSos ? SEND_EVERY_MS_SOS : SEND_EVERY_MS;
       if (!force && last && now - last.at < every && distanceMeters(last.coord, coord) < SEND_MIN_MOVE_M) return;
       lastSent.current = { at: now, coord };
-      const { error } = await supabase.from('user_locations').upsert({
-        user_id: userId,
+      const waiting = await sendPoint(userId, {
         lat: coord.latitude,
         lng: coord.longitude,
-        accuracy_m: accuracy,
-        updated_at: new Date().toISOString(),
+        acc: accuracy,
+        t: new Date().toISOString(),
       });
-      if (error) console.warn('Location upload failed', error.message);
+      setLoc((l) => (l.queued === waiting ? l : { ...l, queued: waiting }));
     },
     [userId, inSos]
   );
@@ -466,4 +468,16 @@ export function iGuard(person: Person | undefined): boolean {
 /** True when this person is my guardian under an active agreement. */
 export function guardsMe(person: Person | undefined): boolean {
   return Boolean(person?.guardianship && !person.guardianship.iAmGuardian && person.guardianship.status !== 'proposed');
+}
+
+/** A person counts as offline when their last location is older than this. */
+export const OFFLINE_AFTER_MS = 10 * 60_000;
+
+export function isOffline(locationAt: number | undefined, now = Date.now()): boolean {
+  return locationAt !== undefined && now - locationAt > OFFLINE_AFTER_MS;
+}
+
+/** Whose history I can open: my own, and my dependents'. */
+export function canSeeHistory(person: Person | undefined): boolean {
+  return iGuard(person);
 }

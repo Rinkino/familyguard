@@ -69,7 +69,7 @@ export type AlertStage = 'left' | 'checking' | 'sos' | 'resolved';
 
 export type ZoneAlert = {
   id: string;
-  kind: 'zone' | 'manual';
+  kind: 'zone' | 'manual' | 'silence';
   zoneId: string | null;
   zoneName: string | null;
   forId: Who;
@@ -79,7 +79,7 @@ export type ZoneAlert = {
   leftAt: number;
   stageEndsAt: number | null;
   sosAt?: number;
-  resolvedHow?: 'back-inside' | 'said-ok' | 'marked-safe';
+  resolvedHow?: 'back-inside' | 'said-ok' | 'marked-safe' | 'back-online';
   coord?: LatLng;
   /** Name given to this SOS in the recordings library. */
   title?: string;

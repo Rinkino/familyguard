@@ -137,7 +137,7 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
               <Pressable
                 key={p.id}
                 onPress={() => onPressPerson?.(p.id)}
-                style={{ position: 'absolute', left: x - 20, top: y - 20, padding: 3, borderRadius: 24, backgroundColor: p.alert ? c.flare : '#FFFFFF' }}
+                style={{ position: 'absolute', left: x - 20, top: y - 20, padding: 3, borderRadius: 24, backgroundColor: p.alert ? c.flare : '#FFFFFF', opacity: p.stale ? 0.5 : 1 }}
               >
                 <Avatar name={p.name} tint={p.tint} size={34} />
               </Pressable>

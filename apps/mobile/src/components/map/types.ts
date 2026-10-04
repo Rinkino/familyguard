@@ -1,7 +1,7 @@
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { LatLng } from '@/lib/geo';
 
-export type MapPerson = { id: string; name: string; tint: number; coord: LatLng; alert?: boolean };
+export type MapPerson = { id: string; name: string; tint: number; coord: LatLng; alert?: boolean; /** Shown faded: no recent location. */ stale?: boolean };
 export type MapZone = { id: string; center: LatLng; radiusM: number; alert?: boolean };
 
 export type FamilyMapProps = {

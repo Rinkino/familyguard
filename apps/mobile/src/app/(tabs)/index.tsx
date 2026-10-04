@@ -11,7 +11,7 @@ import { Avatar, Button, Row, T, attempt } from '@/components/ui';
 import { distanceMeters, formatDistance, formatDuration, type LatLng } from '@/lib/geo';
 import { flags } from '@/lib/flags';
 import { addressAt, getRoute, hasMapboxToken, searchPlaces, type Place, type Route, type TravelMode } from '@/lib/mapbox';
-import { activeAlerts, firstName, formatAgo, formatRemaining, useNow, useStore, whoName } from '@/state/store';
+import { activeAlerts, firstName, formatAgo, formatRemaining, isOffline, useNow, useStore, whoName } from '@/state/store';
 import { space, type, useColors } from '@/theme';
 
 const MODES: { mode: TravelMode; label: string; icon: 'navigation' | 'truck' | 'wind' }[] = [
@@ -77,7 +77,7 @@ export default function MapScreen() {
       { id: 'me', name: store.me.name || 'You', tint: store.me.tint, coord: store.myCoord, alert: alertFor.has('me') },
       ...store.people
         .filter((p) => p.status === 'connected' && p.theyShare && p.coord)
-        .map((p) => ({ id: p.id, name: p.name, tint: p.tint, coord: p.coord!, alert: alertFor.has(p.id) })),
+        .map((p) => ({ id: p.id, name: p.name, tint: p.tint, coord: p.coord!, alert: alertFor.has(p.id), stale: isOffline(p.locationAt) })),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store.people, store.myCoord, store.me, alerts.length]
@@ -378,7 +378,7 @@ export default function MapScreen() {
                 <Pressable key={p.id} onPress={() => choosePerson(p.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
                   <Avatar name={p.name} tint={p.tint} size={32} />
                   <T v="body" style={{ flex: 1 }}>{firstName(p.name)}</T>
-                  <T v="small" color={c.muted}>{formatDistance(distanceMeters(store.myCoord, p.coord))} away</T>
+                  <T v="small" color={c.muted}>{p.stale ? 'Offline' : `${formatDistance(distanceMeters(store.myCoord, p.coord))} away`}</T>
                   <Feather name="chevron-right" size={18} color={c.muted} />
                 </Pressable>
               ))}

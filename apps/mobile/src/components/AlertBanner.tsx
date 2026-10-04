@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import type { ZoneAlert } from '@/types';
-import { formatRemaining, useNow, useStore, whoName } from '@/state/store';
+import { formatAgo, formatRemaining, useNow, useStore, whoName } from '@/state/store';
 import { space, useColors } from '@/theme';
 import { T } from './ui';
 
@@ -16,7 +16,12 @@ export function AlertBanner({ alert }: { alert: ZoneAlert }) {
   const left = alert.stageEndsAt ? formatRemaining(alert.stageEndsAt - now) : '';
   const self = alert.forId === 'me';
 
-  const text = self
+  // You never need a "stopped reporting" banner about yourself.
+  if (alert.kind === 'silence' && self) return null;
+
+  const text = alert.kind === 'silence'
+    ? `${name}'s phone stopped reporting ${formatAgo(alert.leftAt)}. Last seen ${new Date(alert.leftAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
+    : self
     ? {
         left: `You left ${zoneName}. We'll check in with you in ${left}.`,
         checking: `Are you OK? Answer in ${left}.`,
@@ -30,7 +35,7 @@ export function AlertBanner({ alert }: { alert: ZoneAlert }) {
         resolved: '',
       }[alert.stage];
 
-  const urgent = alert.stage !== 'left';
+  const urgent = alert.stage !== 'left' && alert.kind !== 'silence';
 
   return (
     <Pressable

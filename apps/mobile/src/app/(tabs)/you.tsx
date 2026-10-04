@@ -33,7 +33,26 @@ export default function You() {
         </Row>
       </Section>
 
+      {store.queued > 0 && (
+        <Section note="They upload automatically when your phone is back online.">
+          <Row last>
+            <Icon name="wifi-off" color={c.flare} />
+            <T v="body" style={{ flex: 1 }}>
+              Offline. {store.queued} {store.queued === 1 ? 'location' : 'locations'} saved on this phone.
+            </T>
+          </Row>
+        </Section>
+      )}
+
       <Section title="Safety">
+        <Row onPress={() => router.push('/history/me')}>
+          <Icon name="clock" />
+          <View style={{ flex: 1 }}>
+            <T v="bodyStrong">Your location history</T>
+            <T v="small" color={c.muted}>Last 7 days. If your phone is lost, sign in on another phone to see where it was.</T>
+          </View>
+          <Icon name="chevron-right" />
+        </Row>
         <Row last onPress={() => router.push('/recordings')}>
           <Icon name="mic" />
           <View style={{ flex: 1 }}>

@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, TopBar, confirm, attempt } from '@/components/ui';
 import { distanceMeters, formatDistance } from '@/lib/geo';
-import { effectiveShare, firstName, formatAgo, guardsMe, iGuard, sharingCircles, useStore } from '@/state/store';
+import { canSeeHistory, effectiveShare, firstName, formatAgo, guardsMe, iGuard, isOffline, sharingCircles, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
 
 export default function PersonDetail() {
@@ -101,12 +101,24 @@ export default function PersonDetail() {
               <T v="small" color={c.muted}>
                 {person.theyShare
                   ? person.coord && person.locationAt
-                    ? `${formatDistance(distanceMeters(store.myCoord, person.coord))} from you, ${formatAgo(person.locationAt)}`
+                    ? isOffline(person.locationAt)
+                      ? `Offline since ${new Date(person.locationAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Last seen ${formatDistance(distanceMeters(store.myCoord, person.coord))} from you.`
+                      : `${formatDistance(distanceMeters(store.myCoord, person.coord))} from you, ${formatAgo(person.locationAt)}`
                     : 'Sharing. Waiting for their first location.'
                   : `Not right now. Only ${name} can change this.`}
               </T>
             </View>
             <Icon name={person.theyShare ? 'eye' : 'eye-off'} color={person.theyShare ? c.beaconText : c.moss} />
+          </Row>
+        </Section>
+      )}
+
+      {canSeeHistory(person) && (
+        <Section title="History" note={`As ${name}'s guardian you can see where ${name} has been in the last 7 days.`}>
+          <Row last onPress={() => router.push(`/history/${person.id}`)}>
+            <Icon name="clock" />
+            <T v="body" style={{ flex: 1 }}>Location history</T>
+            <Icon name="chevron-right" />
           </Row>
         </Section>
       )}

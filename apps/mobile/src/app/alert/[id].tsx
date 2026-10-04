@@ -36,20 +36,24 @@ export default function AlertDetail() {
   const outside = zone && coord ? Math.max(0, distanceMeters(coord, zone.center) - zone.radiusM) : null;
   const left = alert.stageEndsAt ? formatRemaining(alert.stageEndsAt - now) : '';
   const manual = alert.kind === 'manual';
+  const silence = alert.kind === 'silence';
   const open = alert.stage !== 'resolved';
   const urgent = alert.stage === 'sos' || alert.stage === 'checking';
 
   const headline: Record<AlertStage, string> = {
-    left: `${name} left ${zoneName}`,
+    left: silence ? `${name}'s phone stopped reporting` : `${name} left ${zoneName}`,
     checking: `Waiting for ${name} to answer`,
     sos: `SOS from ${name}`,
     resolved:
       alert.resolvedHow === 'back-inside' ? `${name} is back inside ${zoneName}`
       : alert.resolvedHow === 'said-ok' ? `${name} answered: I'm OK`
+      : alert.resolvedHow === 'back-online' ? `${name}'s phone is reporting again`
       : `${name} was marked safe`,
   };
   const body: Record<AlertStage, string> = {
-    left: `${outside != null ? `${formatDistance(outside)} outside the zone. ` : ''}If ${name} isn't back in ${left}, we'll ask “Are you OK?” on ${name}'s phone.`,
+    left: silence
+      ? `No location since ${time(alert.leftAt)}. The phone may be switched off, out of signal, or the app closed. The pin shows where ${name} was last seen. Try calling.`
+      : `${outside != null ? `${formatDistance(outside)} outside the zone. ` : ''}If ${name} isn't back in ${left}, we'll ask “Are you OK?” on ${name}'s phone.`,
     checking: `${name} has ${left} to answer before an SOS goes out to everyone watching.`,
     sos: manual
       ? `${name} pressed SOS. Audio is recording on ${name}'s phone. Call ${name}, or get help if you can't reach them.`
@@ -67,7 +71,7 @@ export default function AlertDetail() {
 
   return (
     <Screen>
-      <TopBar close title={manual ? 'SOS' : 'Zone alert'} />
+      <TopBar close title={manual ? 'SOS' : silence ? 'Not reporting' : 'Zone alert'} />
 
       {coord && (
         <View style={{ height: 240, borderRadius: 20, overflow: 'hidden', marginTop: space.sm }}>
@@ -83,7 +87,7 @@ export default function AlertDetail() {
       <T v="title" color={urgent ? c.flare : c.ink} style={{ marginTop: space.lg }}>{headline[alert.stage]}</T>
       <T v="body" color={c.muted} style={{ marginTop: space.sm }}>{body[alert.stage]}</T>
 
-      {open && (
+      {open && !silence && (
         <View style={{ marginTop: space.lg, gap: space.md }}>
           {steps.map((s) => (
             <View key={s.label} style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>

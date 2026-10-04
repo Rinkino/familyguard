@@ -14,7 +14,7 @@ export default function CheckIn() {
   const store = useStore();
   const now = useNow();
   const recorder = useSosRecorder();
-  const alert = store.alerts.find((a) => a.forId === 'me' && a.stage !== 'resolved');
+  const alert = store.alerts.find((a) => a.forId === 'me' && a.stage !== 'resolved' && a.kind !== 'silence');
 
   // The server moves stages every ~10 s; nudge it the moment our timer runs out.
   const nudged = useRef<string | null>(null);
