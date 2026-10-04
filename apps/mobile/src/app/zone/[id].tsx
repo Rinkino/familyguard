@@ -7,6 +7,7 @@ import { FamilyMap } from '@/components/map/FamilyMap';
 import type { FamilyMapHandle } from '@/components/map/types';
 import { Button, Field, Screen, Section, Row, T, TopBar, attempt, confirm } from '@/components/ui';
 import { formatDistance, type LatLng } from '@/lib/geo';
+import { flags } from '@/lib/flags';
 import type { Who } from '@/types';
 import { firstName, formatRemaining, iGuard, useNow, useStore, whoName, zoneTargets } from '@/state/store';
 import { space, useColors } from '@/theme';
@@ -48,9 +49,20 @@ export default function ZoneScreen() {
   const [countdownS, setCountdownS] = useState(existing?.countdownS ?? 30);
   const [watcherIds, setWatcherIds] = useState<Who[]>(existing?.watcherIds ?? []);
 
+  // While sizing, keep the circle filling the map width so you see the exact streets inside.
+  const zoomOutTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    map.current?.flyTo(center, radiusM * 2.8);
+    clearTimeout(zoomOutTimer.current);
+    const t = setTimeout(() => map.current?.fitCircle(center, radiusM), 120);
+    return () => clearTimeout(t);
   }, [center, radiusM]);
+
+  // Once you stop adjusting, ease out to show the zone in its surroundings.
+  const settle = () => {
+    clearTimeout(zoomOutTimer.current);
+    zoomOutTimer.current = setTimeout(() => map.current?.fitCircle(center, radiusM, 2.4), 1200);
+  };
+  useEffect(() => () => clearTimeout(zoomOutTimer.current), []);
 
   // Zones set by someone else are read-only, unless you're a guardian of the person inside.
   const canEdit = !existing || existing.setById === 'me' || iGuard(store.people.find((p) => p.id === existing.forId));
@@ -100,7 +112,10 @@ export default function ZoneScreen() {
         countdownS,
         watcherIds: watcherIds.filter((w) => w !== forId),
       }),
-      () => router.back()
+      () => {
+        flags.focusZone = { center, radiusM };
+        router.back();
+      }
     );
 
   const durationOptions: { key: Duration; label: string }[] = [
@@ -121,7 +136,10 @@ export default function ZoneScreen() {
           initialSpanM={radiusM * 2.8}
           zones={[{ id: 'draft', center, radiusM }]}
           pin={center}
-          onLongPress={setCenter}
+          onLongPress={(p) => {
+            setCenter(p);
+            settle();
+          }}
         />
       </View>
       <T v="small" color={c.muted} style={{ marginTop: space.sm }}>
@@ -156,6 +174,7 @@ export default function ZoneScreen() {
           accessibilityLabel="Zone radius"
           value={toSlider(radiusM)}
           onValueChange={(t) => setRadiusM(toRadius(t))}
+          onSlidingComplete={settle}
           minimumValue={0}
           maximumValue={1}
           minimumTrackTintColor={c.beacon}

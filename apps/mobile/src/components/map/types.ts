@@ -15,7 +15,11 @@ export type FamilyMapProps = {
   pin?: LatLng;
   /** Extra top padding (e.g. under a search bar) when fitting the camera. */
   topInset?: number;
+  /** Space covered at the bottom (e.g. by a sheet) to keep clear when fitting. */
+  bottomInset?: number;
   onLongPress?: (coord: LatLng) => void;
+  /** Fires when the user starts moving the map. */
+  onPanDrag?: () => void;
   onPressPerson?: (id: string) => void;
   /** Browser preview only; native circles aren't tappable. Zones are listed in the panel. */
   onPressZone?: (id: string) => void;
@@ -26,4 +30,6 @@ export type FamilyMapProps = {
 export type FamilyMapHandle = {
   flyTo: (coord: LatLng, spanM?: number) => void;
   fitTo: (coords: LatLng[]) => void;
+  /** Frame a circle so it fills the width, with `margin` x its radius around it. */
+  fitCircle: (center: LatLng, radiusM: number, margin?: number) => void;
 };

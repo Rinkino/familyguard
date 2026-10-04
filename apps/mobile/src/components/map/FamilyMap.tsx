@@ -2,13 +2,14 @@
 // Screens only use this wrapper, so swapping to the Mapbox SDK later only
 // touches this file. The browser preview uses FamilyMap.web.tsx instead.
 
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, Fragment, memo, useImperativeHandle, useRef } from 'react';
 import { View } from 'react-native';
 import MapView, { Circle, Marker, Polyline } from 'react-native-maps';
 import { Avatar } from '@/components/ui';
-import type { LatLng } from '@/lib/geo';
+import { offset, type LatLng } from '@/lib/geo';
 import { useColors } from '@/theme';
-import type { FamilyMapHandle, FamilyMapProps } from './types';
+import type { FamilyMapHandle, FamilyMapProps, MapZone } from './types';
+import { useZoneFrames, withAlpha } from './zoneAnim';
 
 const METERS_PER_DEG = 111_320;
 
@@ -22,20 +23,77 @@ function regionFor(center: LatLng, spanM: number) {
   };
 }
 
+/** Zones with grow, pulse and alert-ripple animation. Re-renders on its own ticker. */
+const ZoneLayer = memo(function ZoneLayer({ zones }: { zones: MapZone[] }) {
+  const c = useColors();
+  const frames = useZoneFrames(zones);
+  return (
+    <>
+      {frames.map((f) => {
+        const tone = f.alert ? c.flare : c.beacon;
+        return (
+          <Fragment key={f.id}>
+            {f.ripples.map((r, i) => (
+              <Circle
+                key={`r${i}`}
+                center={f.center}
+                radius={r.radiusM}
+                strokeWidth={2}
+                strokeColor={withAlpha(c.flare, r.opacity)}
+                fillColor="transparent"
+              />
+            ))}
+            <Circle
+              center={f.center}
+              radius={f.pulse.radiusM}
+              strokeWidth={2}
+              strokeColor={withAlpha(tone, f.pulse.opacity)}
+              fillColor="transparent"
+            />
+            <Circle
+              center={f.center}
+              radius={f.radiusM}
+              strokeWidth={3}
+              strokeColor={tone}
+              fillColor={withAlpha(tone, 0.16)}
+            />
+          </Fragment>
+        );
+      })}
+    </>
+  );
+});
+
 export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function FamilyMap(
-  { style, initialCenter, initialSpanM = 6000, people = [], zones = [], route, pin, topInset = 0, onLongPress, onPressPerson, static: isStatic },
+  {
+    style,
+    initialCenter,
+    initialSpanM = 6000,
+    people = [],
+    zones = [],
+    route,
+    pin,
+    topInset = 0,
+    bottomInset = 0,
+    onLongPress,
+    onPanDrag,
+    onPressPerson,
+    static: isStatic,
+  },
   ref
 ) {
   const c = useColors();
   const map = useRef<MapView>(null);
+  const padding = { top: 40 + topInset, right: 24, bottom: 24 + bottomInset, left: 24 };
 
   useImperativeHandle(ref, () => ({
     flyTo: (coord, spanM = 3000) => map.current?.animateToRegion(regionFor(coord, spanM), 450),
-    fitTo: (coords) =>
-      map.current?.fitToCoordinates(coords, {
-        edgePadding: { top: 60 + topInset, right: 50, bottom: 60, left: 50 },
-        animated: true,
-      }),
+    fitTo: (coords) => map.current?.fitToCoordinates(coords, { edgePadding: { ...padding, top: padding.top + 20 }, animated: true }),
+    fitCircle: (center, radiusM, margin = 1.15) => {
+      const r = radiusM * margin;
+      const edge = [0, 90, 180, 270].map((bearing) => offset(center, r, bearing));
+      map.current?.fitToCoordinates(edge, { edgePadding: padding, animated: true });
+    },
   }));
 
   return (
@@ -44,6 +102,7 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
       style={[{ flex: 1 }, style]}
       initialRegion={regionFor(initialCenter, initialSpanM)}
       onLongPress={(e) => onLongPress?.(e.nativeEvent.coordinate)}
+      onPanDrag={onPanDrag ? () => onPanDrag() : undefined}
       scrollEnabled={!isStatic}
       zoomEnabled={!isStatic}
       rotateEnabled={false}
@@ -52,19 +111,10 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
       showsCompass={false}
       toolbarEnabled={false}
     >
-      {zones.map((z) => (
-        <Circle
-          key={`${z.id}-${z.radiusM}-${z.alert ? 'a' : 'n'}`}
-          center={z.center}
-          radius={z.radiusM}
-          strokeWidth={2}
-          strokeColor={z.alert ? c.flare : c.beacon}
-          fillColor={z.alert ? 'rgba(228,87,46,0.12)' : 'rgba(242,183,5,0.18)'}
-        />
-      ))}
+      <ZoneLayer zones={zones} />
 
       {route && route.length > 1 && (
-        <Polyline coordinates={route} strokeColor={c.beacon} strokeWidth={5} lineCap="round" lineJoin="round" />
+        <Polyline coordinates={route} strokeColor={c.beaconText} strokeWidth={5} lineCap="round" lineJoin="round" />
       )}
 
       {pin && <Marker coordinate={pin} pinColor={c.beacon} />}
