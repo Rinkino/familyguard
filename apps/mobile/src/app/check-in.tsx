@@ -154,7 +154,7 @@ function Recording({ since, now, chunks }: { since: number; now: number; chunks:
       >
         <Animated.View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#F0714D', opacity: pulse }} />
         <T v="bodyStrong" color="#FFFFFF" style={{ flex: 1 }}>Recording audio</T>
-        <T v="heading" color="#FFFFFF" style={{ fontVariant: ['tabular-nums'] }}>{elapsed}</T>
+        <T v="heading" color="#FFFFFF">{elapsed}</T>
       </View>
       <T v="small" color="#D4CFC2">
         {chunks === 0 ? 'First clip uploads after 30 seconds.' : `${chunks} ${chunks === 1 ? 'clip' : 'clips'} sent to your watchers.`}

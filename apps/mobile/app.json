@@ -15,7 +15,7 @@
     "android": {
       "package": "com.familyguard.safety",
       "adaptiveIcon": {
-        "backgroundColor": "#2F6B4F",
+        "backgroundColor": "#F2B705",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -35,10 +35,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 160,
           "resizeMode": "contain",
-          "backgroundColor": "#EEF2F0",
+          "backgroundColor": "#F2F1EC",
           "dark": {
-            "image": "./assets/splash-icon.png",
-            "backgroundColor": "#0E1714"
+            "image": "./assets/icon.png",
+            "backgroundColor": "#13120E"
           }
         }
       ],

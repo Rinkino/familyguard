@@ -12,8 +12,8 @@ fig() { # $1 parent colour, $2 child colour
 SVG
 }
 svg() { echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">'"$1$(fig "$2" "$3")"'</svg>' > "$4"; }
-svg '<rect width="1024" height="1024" fill="#2F6B4F"/>' '#FFFFFF' '#BFE3CF' icon.svg
-svg '' '#FFFFFF' '#BFE3CF' adaptive-foreground.svg
+svg '<rect width="1024" height="1024" fill="#F2B705"/>' '#2A1F00' '#5C4300' icon.svg
+svg '' '#2A1F00' '#5C4300' adaptive-foreground.svg
 svg '' '#FFFFFF' '#FFFFFF' monochrome.svg
-svg '' '#2F6B4F' '#7FB79A' mark-green.svg
-echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#2F6B4F"/></svg>' > adaptive-background.svg
+svg '' '#2A1F00' '#5C4300' mark.svg
+echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#F2B705"/></svg>' > adaptive-background.svg
