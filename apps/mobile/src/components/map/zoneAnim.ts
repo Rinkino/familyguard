@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import type { MapZone } from './types';
 
-const GROW_MS = 450;
+const GROW_MS = 900;
 const TICK_MS = 70; // ~14 fps is plenty for slow pulses and keeps the map light
-const PULSE_MS = 2400;
-const RIPPLE_MS = 1400;
+const PULSE_MS = 2000;
+const RIPPLE_MS = 1600;
 
 export type ZoneFrame = {
   id: string;
@@ -59,7 +59,7 @@ export function useZoneFrames(zones: MapZone[]): ZoneFrame[] {
     const ripples = z.alert && !reduce
       ? [0, 0.5].map((offset) => {
           const r = ((now / RIPPLE_MS) + offset) % 1;
-          return { radiusM: radiusM * (1 + r * 0.6), opacity: (1 - r) * 0.8 };
+          return { radiusM: radiusM * (1 + r * 0.9), opacity: (1 - r) * 0.9 };
         })
       : [];
     return {
@@ -67,7 +67,7 @@ export function useZoneFrames(zones: MapZone[]): ZoneFrame[] {
       center: z.center,
       alert: Boolean(z.alert),
       radiusM,
-      pulse: { radiusM: radiusM * (1 + p * 0.08), opacity: reduce ? 0 : (1 - p) * 0.6 },
+      pulse: { radiusM: radiusM * (1 + p * 0.3), opacity: reduce ? 0 : (1 - p) * 0.85 },
       ripples,
     };
   });

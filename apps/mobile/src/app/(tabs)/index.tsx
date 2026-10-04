@@ -83,6 +83,7 @@ export default function MapScreen() {
     [store.people, store.myCoord, store.me, alerts.length]
   );
 
+  const waitingForLocation = store.people.filter((p) => p.status === 'connected' && p.theyShare && !p.coord);
   const selectedPerson = selection?.kind === 'person' ? store.people.find((p) => p.id === selection.id) : undefined;
   const selectedZone = selection?.kind === 'zone' ? store.zones.find((z) => z.id === selection.id) : undefined;
   const destination: { name: string; coord: LatLng } | null =
@@ -144,6 +145,15 @@ export default function MapScreen() {
     map.current?.flyTo(p.coord, 1500);
   };
 
+  // From the list: select the friend and go straight to a route.
+  const routeToPerson = (id: string) => {
+    const p = store.people.find((x) => x.id === id);
+    if (!p?.coord) return;
+    select({ kind: 'person', id });
+    setSnap('half');
+    directions(mode, p.coord);
+  };
+
   const chooseZone = (id: string) => {
     const z = store.zones.find((x) => x.id === id);
     if (!z) return;
@@ -157,15 +167,15 @@ export default function MapScreen() {
     setSelection((s) => (s?.kind === 'place' && s.place.id === 'pending' ? { kind: 'place', place } : s));
   };
 
-  const directions = async (m: TravelMode = mode) => {
-    if (!destination) return;
+  const directions = async (m: TravelMode = mode, to: LatLng | undefined = destination?.coord) => {
+    if (!to) return;
     setMode(m);
     setRouteState('loading');
     try {
-      const r = await getRoute(store.myCoord, destination.coord, m);
+      const r = await getRoute(store.myCoord, to, m);
       setRoute(r);
       setRouteState('idle');
-      routedFrom.current = destination.coord;
+      routedFrom.current = to;
       map.current?.fitTo(r.coords);
     } catch {
       setRouteState('error');
@@ -369,18 +379,39 @@ export default function MapScreen() {
 
             <View>
               <T v="heading">Sharing with you</T>
-              {people.length === 1 && (
+              {people.length === 1 && waitingForLocation.length === 0 && (
                 <T v="small" color={c.muted} style={{ marginTop: space.xs }}>
                   No one is sharing their location with you yet.
                 </T>
               )}
               {people.slice(1).map((p) => (
-                <Pressable key={p.id} onPress={() => choosePerson(p.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
+                <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 8 }}>
+                  <Pressable onPress={() => choosePerson(p.id)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                    <Avatar name={p.name} tint={p.tint} size={32} />
+                    <View style={{ flex: 1 }}>
+                      <T v="body">{firstName(p.name)}</T>
+                      <T v="small" color={c.muted}>{p.stale ? 'Offline, last seen here' : `${formatDistance(distanceMeters(store.myCoord, p.coord))} away`}</T>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Directions to ${firstName(p.name)}`}
+                    onPress={() => routeToPerson(p.id)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.md, height: 36, borderRadius: 18, backgroundColor: c.beacon }}
+                  >
+                    <Feather name="corner-up-right" size={14} color={c.onBeacon} />
+                    <T v="smallStrong" color={c.onBeacon}>Directions</T>
+                  </Pressable>
+                </View>
+              ))}
+              {waitingForLocation.map((p) => (
+                <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 8, opacity: 0.6 }}>
                   <Avatar name={p.name} tint={p.tint} size={32} />
-                  <T v="body" style={{ flex: 1 }}>{firstName(p.name)}</T>
-                  <T v="small" color={c.muted}>{p.stale ? 'Offline' : `${formatDistance(distanceMeters(store.myCoord, p.coord))} away`}</T>
-                  <Feather name="chevron-right" size={18} color={c.muted} />
-                </Pressable>
+                  <View style={{ flex: 1 }}>
+                    <T v="body">{firstName(p.name)}</T>
+                    <T v="small" color={c.muted}>Sharing, but no location yet. {firstName(p.name)} needs to open the app.</T>
+                  </View>
+                </View>
               ))}
             </View>
 

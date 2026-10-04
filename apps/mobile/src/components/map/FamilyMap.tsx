@@ -46,7 +46,7 @@ const ZoneLayer = memo(function ZoneLayer({ zones }: { zones: MapZone[] }) {
             <Circle
               center={f.center}
               radius={f.pulse.radiusM}
-              strokeWidth={2}
+              strokeWidth={4}
               strokeColor={withAlpha(tone, f.pulse.opacity)}
               fillColor="transparent"
             />

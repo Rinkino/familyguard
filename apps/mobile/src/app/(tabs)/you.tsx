@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { View } from 'react-native';
 import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, confirm, attempt } from '@/components/ui';
@@ -102,6 +103,22 @@ export default function You() {
           }
         />
       </View>
+      <AppVersion />
     </Screen>
+  );
+}
+
+/** Which published update this phone is running, to check testers are on the latest. */
+function AppVersion() {
+  const c = useColors();
+  const manifest = Constants.manifest2 as { id?: string; createdAt?: string } | null;
+  const id = manifest?.id?.slice(0, 8);
+  const published = manifest?.createdAt
+    ? new Date(manifest.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    : null;
+  return (
+    <T v="tiny" color={c.muted} style={{ textAlign: 'center', marginTop: space.lg }}>
+      {id ? `Version ${id}${published ? `, published ${published}` : ''}` : 'Development version'}
+    </T>
   );
 }

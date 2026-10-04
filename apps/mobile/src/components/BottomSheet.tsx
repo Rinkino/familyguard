@@ -47,15 +47,40 @@ export function BottomSheet({
   // Settle on the requested height whenever it (or the screen size) changes.
   useEffect(() => {
     if (!areaH) return;
-    Animated.spring(y, { toValue: offsetFor(snap), useNativeDriver: true, bounciness: 2, speed: 14 }).start();
+    Animated.spring(y, { toValue: offsetFor(snap), useNativeDriver: false, bounciness: 2, speed: 14 }).start();
     onVisibleHeight?.(heights[snap]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap, areaH]);
 
+  // Scroll position of the list inside, so a pull-down at the top of a fully
+  // open sheet closes it instead of fighting the scroll.
+  const scrollY = useRef(0);
+
+  const settle = (vy: number) => {
+    // Project the flick a little forward, then pick the closest height.
+    const projected = heights.tall - (yNow.current + vy * 180);
+    const order: Snap[] = ['peek', 'half', 'tall'];
+    const next = order.reduce((best, s) =>
+      Math.abs(heights[s] - projected) < Math.abs(heights[best] - projected) ? s : best
+    );
+    if (next === snap) {
+      Animated.spring(y, { toValue: offsetFor(next), useNativeDriver: false, bounciness: 2, speed: 14 }).start();
+    }
+    onSnapChange(next);
+  };
+
   const pan = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4,
+        // Claim clearly vertical drags anywhere on the sheet, before buttons or the list do,
+        // except when the sheet is fully open and the list is scrolled or being scrolled up.
+        onMoveShouldSetPanResponderCapture: (_, g) => {
+          const vertical = Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5;
+          if (!vertical) return false;
+          if (snap !== 'tall') return true;
+          return g.dy > 0 && scrollY.current <= 0;
+        },
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           y.stopAnimation();
           startY.current = yNow.current;
@@ -64,18 +89,8 @@ export function BottomSheet({
           const max = heights.tall - heights.peek;
           y.setValue(Math.max(0, Math.min(max, startY.current + g.dy)));
         },
-        onPanResponderRelease: (_, g) => {
-          // Project the flick a little forward, then pick the closest height.
-          const projected = heights.tall - (yNow.current + g.vy * 180);
-          const order: Snap[] = ['peek', 'half', 'tall'];
-          const next = order.reduce((best, s) =>
-            Math.abs(heights[s] - projected) < Math.abs(heights[best] - projected) ? s : best
-          );
-          if (next === snap) {
-            Animated.spring(y, { toValue: offsetFor(next), useNativeDriver: true, bounciness: 2, speed: 14 }).start();
-          }
-          onSnapChange(next);
-        },
+        onPanResponderRelease: (_, g) => settle(g.vy),
+        onPanResponderTerminate: (_, g) => settle(g.vy),
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [heights, snap]
@@ -102,6 +117,7 @@ export function BottomSheet({
             {above}
           </View>
           <View
+            {...pan.panHandlers}
             style={{
               flex: 1,
               backgroundColor: c.surface,
@@ -114,7 +130,7 @@ export function BottomSheet({
               elevation: 8,
             }}
           >
-            <View {...pan.panHandlers}>
+            <View>
               <Pressable
                 accessibilityRole="adjustable"
                 accessibilityLabel="Panel size"
@@ -127,7 +143,9 @@ export function BottomSheet({
               {header}
             </View>
             <ScrollView
-              scrollEnabled={snap !== 'peek'}
+              scrollEnabled={snap === 'tall'}
+              onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
+              scrollEventThrottle={32}
               contentContainerStyle={{ paddingHorizontal: space.md, paddingBottom: heights.tall - heights[snap] + space.xl }}
               keyboardShouldPersistTaps="handled"
             >
