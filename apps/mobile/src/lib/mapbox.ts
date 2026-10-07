@@ -1,8 +1,11 @@
-// The only module that talks to Mapbox. Without EXPO_PUBLIC_MAPBOX_TOKEN it
-// falls back to sample Lagos data so the app still works in demos.
+// Search, pin addresses and directions. Directions always come from Mapbox.
+// Search and pin addresses use Geoapify (OpenStreetMap) when its key is set,
+// because it covers Nigerian places far better; otherwise Mapbox. Without any
+// key, search falls back to sample Lagos places.
 
 import { mockPlaces } from '@/mock/places';
 import { distanceMeters, type LatLng } from './geo';
+import { geoapifyAddressAt, geoapifySearch, hasGeoapifyKey } from './geoapify';
 
 const TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 const BASE = 'https://api.mapbox.com';
@@ -48,6 +51,7 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 export async function searchPlaces(query: string, near: LatLng, signal?: AbortSignal): Promise<Place[]> {
   const q = query.trim();
   if (!q) return [];
+  if (hasGeoapifyKey) return geoapifySearch(q, near, signal);
   if (!TOKEN) {
     const lower = q.toLowerCase();
     return mockPlaces.filter((p) => `${p.name} ${p.address}`.toLowerCase().includes(lower)).slice(0, 6);
@@ -70,6 +74,14 @@ export async function addressAt(coord: LatLng): Promise<Place> {
     address: `${coord.latitude.toFixed(5)}, ${coord.longitude.toFixed(5)}`,
     coord,
   };
+  if (hasGeoapifyKey) {
+    try {
+      const p = await geoapifyAddressAt(coord);
+      if (p) return { ...p, id: fallback.id };
+    } catch {
+      // fall through to Mapbox
+    }
+  }
   if (!TOKEN) {
     const nearest = [...mockPlaces].sort((a, b) => distanceMeters(a.coord, coord) - distanceMeters(b.coord, coord))[0];
     return nearest && distanceMeters(nearest.coord, coord) < 600
