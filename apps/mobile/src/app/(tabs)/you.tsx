@@ -75,6 +75,14 @@ export default function You() {
         </Row>
       </Section>
 
+      <Section title="Phone number" note="People you're connected with can call you from an alert.">
+        <Row last onPress={() => router.push('/phone')}>
+          <Icon name="phone" />
+          <T v="body" style={{ flex: 1 }} color={store.me.phone ? c.ink : c.muted}>{store.me.phone ?? 'Add your number'}</T>
+          <Icon name="chevron-right" />
+        </Row>
+      </Section>
+
       <Section title="Your code" note="Give this to someone so they can add you.">
         <Row last onPress={() => router.push('/add-person')}>
           <Icon name="share-2" />

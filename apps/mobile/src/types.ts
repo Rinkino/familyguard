@@ -25,6 +25,8 @@ export type Person = {
   status: 'connected' | 'pending' | 'incoming';
   coord?: LatLng;
   locationAt?: number;
+  /** Only shared once connected. */
+  phone?: string;
   /** Parent/child agreement with this person, if any. */
   guardianship?: Guardianship;
 };
@@ -49,6 +51,7 @@ export type Me = {
   email: string;
   tint: number;
   inviteCode: string;
+  phone: string | null;
 };
 
 export type Zone = {
@@ -69,7 +72,8 @@ export type AlertStage = 'left' | 'checking' | 'sos' | 'resolved';
 
 export type ZoneAlert = {
   id: string;
-  kind: 'zone' | 'manual' | 'silence';
+  kind: 'zone' | 'manual' | 'silence' | 'journey';
+  journeyId?: string | null;
   zoneId: string | null;
   zoneName: string | null;
   forId: Who;
@@ -79,8 +83,35 @@ export type ZoneAlert = {
   leftAt: number;
   stageEndsAt: number | null;
   sosAt?: number;
-  resolvedHow?: 'back-inside' | 'said-ok' | 'marked-safe' | 'back-online';
+  resolvedHow?: 'back-inside' | 'said-ok' | 'marked-safe' | 'back-online' | 'arrived' | 'cancelled';
   coord?: LatLng;
   /** Name given to this SOS in the recordings library. */
   title?: string;
+};
+
+export type TravelMode = 'walking' | 'driving' | 'cycling';
+
+export type Journey = {
+  id: string;
+  forId: Who;
+  destinationName: string;
+  destination: LatLng;
+  mode: TravelMode;
+  route: LatLng[];
+  routeDistanceM: number;
+  routeDurationS: number;
+  maxDeviationM: number;
+  graceMin: number;
+  countdownS: number;
+  watcherIds: Who[];
+  status: 'active' | 'arrived' | 'cancelled';
+  startedAt: number;
+};
+
+export type Roadblock = {
+  id: string;
+  journeyId: string;
+  coord: LatLng;
+  note: string | null;
+  createdAt: number;
 };

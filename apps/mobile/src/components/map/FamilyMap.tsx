@@ -8,7 +8,8 @@ import MapView, { Circle, Marker, Polyline } from 'react-native-maps';
 import { Avatar } from '@/components/ui';
 import { offset, type LatLng } from '@/lib/geo';
 import { useColors } from '@/theme';
-import type { FamilyMapHandle, FamilyMapProps, MapZone } from './types';
+import { Feather } from '@expo/vector-icons';
+import type { FamilyMapHandle, FamilyMapProps, MapMarker, MapZone } from './types';
 import { useZoneFrames, withAlpha } from './zoneAnim';
 
 const METERS_PER_DEG = 111_320;
@@ -64,6 +65,28 @@ const ZoneLayer = memo(function ZoneLayer({ zones }: { zones: MapZone[] }) {
   );
 });
 
+/** Round badge for a destination flag or a user-reported roadblock. */
+function MarkerBadge({ kind }: { kind: MapMarker['kind'] }) {
+  const c = useColors();
+  const roadblock = kind === 'roadblock';
+  return (
+    <View
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: roadblock ? c.flare : c.ink,
+        borderWidth: 3,
+        borderColor: '#FFFFFF',
+      }}
+    >
+      <Feather name={roadblock ? 'alert-octagon' : 'flag'} size={14} color="#FFFFFF" />
+    </View>
+  );
+}
+
 export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function FamilyMap(
   {
     style,
@@ -72,6 +95,8 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
     people = [],
     zones = [],
     route,
+    routes = [],
+    markers = [],
     pin,
     topInset = 0,
     bottomInset = 0,
@@ -116,6 +141,25 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
       {route && route.length > 1 && (
         <Polyline coordinates={route} strokeColor={c.beaconText} strokeWidth={5} lineCap="round" lineJoin="round" />
       )}
+
+      {routes.map((r) =>
+        r.coords.length > 1 ? (
+          <Polyline
+            key={r.id}
+            coordinates={r.coords}
+            strokeColor={r.muted ? withAlpha(c.beaconText, 0.55) : c.beaconText}
+            strokeWidth={r.muted ? 4 : 6}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null
+      )}
+
+      {markers.map((m) => (
+        <Marker key={m.id} coordinate={m.coord} anchor={{ x: 0.5, y: 0.5 }} title={m.title}>
+          <MarkerBadge kind={m.kind} />
+        </Marker>
+      ))}
 
       {pin && <Marker coordinate={pin} pinColor={c.beacon} />}
 

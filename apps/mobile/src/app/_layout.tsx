@@ -88,6 +88,9 @@ function RootStack() {
           <Stack.Screen name="templates" />
           <Stack.Screen name="recordings" />
           <Stack.Screen name="history/[id]" />
+          <Stack.Screen name="journey/[id]" />
+          <Stack.Screen name="journey/new" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="phone" options={{ presentation: 'modal' }} />
           <Stack.Screen name="recording/[id]" />
           <Stack.Screen name="guardian/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="add-person" options={{ presentation: 'modal' }} />

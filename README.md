@@ -38,6 +38,7 @@ Testers can use the published version without running anything: see the tester g
 - **Zones** are circles someone should stay inside, for set hours or until turned off. The server checks every location against active zones.
 - **Escalation runs on the server** (pg_cron every 10 s): left zone → watchers alerted → "Are you OK?" countdown → SOS. An SOS still goes out if the phone dies mid-countdown.
 - **SOS recording** uploads audio in 30-second chunks to a private bucket; watchers can play, and the person (or their guardian) can rename, save or delete.
+- **Journeys** follow a planned route to a destination. Going further off it than allowed escalates like a zone; coming back clears it; arriving ends the journey. Travellers can report roadblocks (shown to watchers as user-reported) and reroute.
 - **Location history** keeps 7 days, visible only to the person and their guardians. Points recorded offline upload when the phone reconnects.
 - **Privacy:** every table has row-level security; people only see what is shared with them.
 
@@ -55,4 +56,4 @@ apps/mobile/assets/brand/make.sh   regenerates the logo SVGs
 
 ## Not built yet
 
-Background tracking and push notifications (need a development build), Apple sign-in (needs an Apple Developer account), better place search for Nigeria, journey route monitoring.
+Background tracking and push notifications (need a development build), Apple sign-in (needs an Apple Developer account). Place search across Nigeria is ready for Geoapify and switches on with `EXPO_PUBLIC_GEOAPIFY_KEY`.

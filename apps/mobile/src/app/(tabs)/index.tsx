@@ -11,7 +11,7 @@ import { Avatar, Button, Row, T, attempt } from '@/components/ui';
 import { distanceMeters, formatDistance, formatDuration, type LatLng } from '@/lib/geo';
 import { flags } from '@/lib/flags';
 import { addressAt, getRoute, hasMapboxToken, searchPlaces, type Place, type Route, type TravelMode } from '@/lib/mapbox';
-import { activeAlerts, firstName, formatAgo, formatRemaining, isOffline, useNow, useStore, whoName } from '@/state/store';
+import { activeAlerts, firstName, formatAgo, formatRemaining, isOffline, myJourney, useNow, useStore, whoName } from '@/state/store';
 import { space, type, useColors } from '@/theme';
 
 const MODES: { mode: TravelMode; label: string; icon: 'navigation' | 'truck' | 'wind' }[] = [
@@ -202,7 +202,12 @@ export default function MapScreen() {
     return { z, detail: `${who === 'You' ? 'You stay' : `${who} stays`} within ${formatDistance(z.radiusM)}. ${time}${by}` };
   });
 
-  const peekSummary = selectedZone
+  const activeJourney = myJourney(store.journeys);
+  const watchedJourneys = store.journeys.filter((j) => j.forId !== 'me');
+
+  const peekSummary = activeJourney && !selection
+    ? `On the way to ${activeJourney.destinationName}`
+    : selectedZone
     ? selectedZone.name
     : destination
       ? destination.name
@@ -217,6 +222,11 @@ export default function MapScreen() {
         people={people}
         zones={store.zones.map((z) => ({ id: z.id, center: z.center, radiusM: z.radiusM, alert: zoneAlert.has(z.id) }))}
         route={route?.coords}
+        routes={store.journeys.map((j) => ({ id: j.id, coords: j.route, muted: j.forId !== 'me' }))}
+        markers={[
+          ...store.journeys.map((j) => ({ id: `dest-${j.id}`, coord: j.destination, kind: 'destination' as const, title: j.destinationName })),
+          ...store.roadblocks.map((r) => ({ id: r.id, coord: r.coord, kind: 'roadblock' as const, title: r.note ?? 'Roadblock' })),
+        ]}
         pin={selection?.kind === 'place' ? selection.place.coord : undefined}
         topInset={insets.top + 60}
         bottomInset={sheetH}
@@ -336,9 +346,44 @@ export default function MapScreen() {
                 />
               )}
             </View>
+            {selection?.kind === 'place' && !activeJourney && (
+              <Button
+                kind="secondary"
+                label="Start a journey here"
+                icon={<Feather name="navigation" size={16} color={c.ink} />}
+                onPress={() =>
+                  router.push({
+                    pathname: '/journey/new',
+                    params: { name: destination.name, lat: String(destination.coord.latitude), lng: String(destination.coord.longitude) },
+                  })
+                }
+              />
+            )}
           </View>
         ) : (
           <View style={{ gap: space.lg }}>
+            {activeJourney && <JourneyCard journeyId={activeJourney.id} />}
+
+            {watchedJourneys.length > 0 && (
+              <View>
+                <T v="heading">Journeys you're watching</T>
+                {watchedJourneys.map((j) => (
+                  <Pressable
+                    key={j.id}
+                    onPress={() => router.push(`/journey/${j.id}`)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.hairline }}
+                  >
+                    <Feather name="navigation" size={18} color={c.beaconText} />
+                    <View style={{ flex: 1 }}>
+                      <T v="bodyStrong">{whoName(store.people, j.forId)} to {j.destinationName}</T>
+                      <T v="small" color={c.muted}>Started {formatAgo(j.startedAt)}</T>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={c.muted} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <T v="heading">Zones</T>
@@ -644,6 +689,35 @@ function SosButton() {
         }}
       />
       <T v="bodyStrong" color="#FFFFFF">{mySos ? 'SOS active' : holding ? 'Keep holding…' : 'Hold for SOS'}</T>
+    </Pressable>
+  );
+}
+
+/** Your journey in progress, at the top of the Map panel. */
+function JourneyCard({ journeyId }: { journeyId: string }) {
+  const c = useColors();
+  const store = useStore();
+  const now = useNow();
+  const j = store.journeys.find((x) => x.id === journeyId);
+  if (!j) return null;
+  const left = distanceMeters(store.myCoord, j.destination);
+  const expectedAt = j.startedAt + j.routeDurationS * 1000;
+  const offRoute = store.alerts.some((a) => a.journeyId === j.id && a.stage !== 'resolved');
+  return (
+    <Pressable
+      onPress={() => router.push(`/journey/${j.id}`)}
+      style={{ backgroundColor: offRoute ? c.flareSoft : c.beaconSoft, borderRadius: 18, padding: space.md, gap: 4 }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Feather name="navigation" size={16} color={offRoute ? c.flare : c.beaconText} />
+        <T v="bodyStrong" style={{ flex: 1 }}>On the way to {j.destinationName}</T>
+        <Feather name="chevron-right" size={18} color={c.muted} />
+      </View>
+      <T v="small" color={offRoute ? c.flare : c.muted}>
+        {offRoute
+          ? "You're off route. Your watchers have been told."
+          : `${formatDistance(left)} to go. Expected around ${new Date(expectedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${now > expectedAt ? ' (running late)' : ''}.`}
+      </T>
     </Pressable>
   );
 }

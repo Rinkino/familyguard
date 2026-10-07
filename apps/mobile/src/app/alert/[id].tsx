@@ -3,7 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { FamilyMap } from '@/components/map/FamilyMap';
 import { SosClips } from '@/components/SosClips';
-import { Button, Screen, T, TopBar, attempt, notice } from '@/components/ui';
+import { Button, Screen, T, TopBar, attempt } from '@/components/ui';
+import { callPerson } from '@/lib/call';
 import { distanceMeters, formatDistance } from '@/lib/geo';
 import { formatRemaining, useNow, useStore, whoName } from '@/state/store';
 import type { AlertStage } from '@/types';
@@ -128,7 +129,7 @@ export default function AlertDetail() {
               kind={urgent ? 'primary' : 'secondary'}
               label={`Call ${name}`}
               icon={<Feather name="phone" size={16} color={urgent ? c.onBeacon : c.ink} />}
-              onPress={() => notice('Calling is not set up yet', "Phone numbers aren't collected yet. Call them from your contacts.")}
+              onPress={() => callPerson(name, person?.phone)}
             />
             {alert.stage === 'sos' && (
               <Button kind="secondary" label={`Mark ${name} safe`} onPress={() => attempt(store.actions.markSafe(alert.id))} />

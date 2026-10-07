@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { distanceMeters, type LatLng } from '@/lib/geo';
 import { sendPoint } from '@/lib/locationQueue';
 import { supabase } from '@/lib/supabase';
-import type { Circle, Me, Person, Template, Who, Zone, ZoneAlert } from '@/types';
+import type { Circle, Journey, Me, Person, Roadblock, Template, Who, Zone, ZoneAlert } from '@/types';
 
 /** Used for map centring until the first GPS fix: Yaba, Lagos. */
 const FALLBACK_COORD: LatLng = { latitude: 6.5095, longitude: 3.3711 };
@@ -25,11 +25,14 @@ type Data = {
   circles: Circle[];
   zones: Zone[];
   alerts: ZoneAlert[];
+  /** Active journeys you're on, watching, or guarding. */
+  journeys: Journey[];
+  roadblocks: Roadblock[];
 };
 
 const empty: Data = {
   loaded: false,
-  me: { id: '', name: '', email: '', tint: 0, inviteCode: '' },
+  me: { id: '', name: '', email: '', tint: 0, inviteCode: '', phone: null },
   onboarded: false,
   pausedAll: false,
   templates: [],
@@ -37,6 +40,8 @@ const empty: Data = {
   circles: [],
   zones: [],
   alerts: [],
+  journeys: [],
+  roadblocks: [],
 };
 
 type LocationState = {
@@ -56,8 +61,8 @@ async function loadData(userId: string, email: string): Promise<Data> {
   const db = supabase!;
   const toWho = (id: string): Who => (id === userId ? 'me' : id);
 
-  const [profile, templates, people, circles, members, zones, alerts, guardianships] = await Promise.all([
-    db.from('profiles').select('display_name, tint, invite_code, sharing_paused').eq('id', userId).single(),
+  const [profile, templates, people, circles, members, zones, alerts, guardianships, journeys] = await Promise.all([
+    db.from('profiles').select('display_name, tint, invite_code, sharing_paused, phone').eq('id', userId).single(),
     db.from('relationship_templates').select('id, owner_id, name, share_by_default').order('created_at'),
     db.rpc('my_people'),
     db.from('circles').select('id, name, share_with_circle').order('created_at'),
@@ -69,7 +74,12 @@ async function loadData(userId: string, email: string): Promise<Data> {
       .or(`stage.neq.resolved,resolved_at.gt.${new Date(Date.now() - 6 * 3600_000).toISOString()}`)
       .order('left_at', { ascending: false }),
     db.from('guardianships').select('guardian_id, dependent_id, status, proposed_by'),
+    db.from('journeys').select('*').eq('status', 'active').order('started_at', { ascending: false }),
   ]);
+  const journeyRows = need(journeys) ?? [];
+  const roadblockRows = journeyRows.length
+    ? need(await db.from('roadblocks').select('*').in('journey_id', journeyRows.map((j) => j.id)).order('created_at')) ?? []
+    : [];
   const agreements = need(guardianships) ?? [];
   const agreementWith = (otherId: string): Person['guardianship'] => {
     const g = agreements.find(
@@ -84,7 +94,7 @@ async function loadData(userId: string, email: string): Promise<Data> {
 
   return {
     loaded: true,
-    me: { id: userId, email, name: p.display_name ?? '', tint: p.tint, inviteCode: p.invite_code },
+    me: { id: userId, email, name: p.display_name ?? '', tint: p.tint, inviteCode: p.invite_code, phone: p.phone ?? null },
     onboarded: Boolean(p.display_name),
     pausedAll: p.sharing_paused,
     templates: (need(templates) ?? []).map((t) => ({
@@ -106,6 +116,7 @@ async function loadData(userId: string, email: string): Promise<Data> {
         coord: r.lat != null ? { latitude: r.lat, longitude: r.lng } : undefined,
         locationAt: r.location_at ? Date.parse(r.location_at) : undefined,
         guardianship: agreementWith(r.id),
+        phone: r.phone ?? undefined,
       }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     circles: (need(circles) ?? []).map((c) => ({
@@ -131,6 +142,7 @@ async function loadData(userId: string, email: string): Promise<Data> {
       kind: a.kind,
       zoneId: a.zone_id,
       zoneName: a.zone_name,
+      journeyId: a.journey_id ?? null,
       forId: toWho(a.for_user),
       watcherIds: (a.watcher_ids as string[]).map(toWho),
       stage: a.stage,
@@ -141,6 +153,29 @@ async function loadData(userId: string, email: string): Promise<Data> {
       resolvedHow: a.resolved_how ?? undefined,
       coord: a.lat != null ? { latitude: a.lat, longitude: a.lng } : undefined,
       title: a.title ?? undefined,
+    })),
+    journeys: journeyRows.map((j) => ({
+      id: j.id,
+      forId: toWho(j.user_id),
+      destinationName: j.destination_name,
+      destination: { latitude: j.dest_lat, longitude: j.dest_lng },
+      mode: j.mode,
+      route: (j.route as [number, number][]).map(([longitude, latitude]) => ({ latitude, longitude })),
+      routeDistanceM: j.route_distance_m,
+      routeDurationS: j.route_duration_s,
+      maxDeviationM: j.max_deviation_m,
+      graceMin: j.grace_min,
+      countdownS: j.countdown_s,
+      watcherIds: (j.watcher_ids as string[]).map(toWho),
+      status: j.status,
+      startedAt: Date.parse(j.started_at),
+    })),
+    roadblocks: roadblockRows.map((r) => ({
+      id: r.id,
+      journeyId: r.journey_id,
+      coord: { latitude: r.lat, longitude: r.lng },
+      note: r.note,
+      createdAt: Date.parse(r.created_at),
     })),
   };
 }
@@ -160,6 +195,57 @@ function useActions(data: Data, loc: LocationState, reload: () => Promise<void>,
   };
 
   return {
+    savePhone: (phone: string | null) => run(db.from('profiles').update({ phone }).eq('id', myId)),
+
+    startJourney: (j: {
+      destinationName: string;
+      destination: LatLng;
+      mode: Journey['mode'];
+      route: LatLng[];
+      distanceM: number;
+      durationS: number;
+      maxDeviationM: number;
+      graceMin: number;
+      countdownS: number;
+      watcherIds: string[];
+    }) =>
+      run(
+        db.from('journeys').insert({
+          user_id: myId,
+          destination_name: j.destinationName,
+          dest_lat: j.destination.latitude,
+          dest_lng: j.destination.longitude,
+          mode: j.mode,
+          route: j.route.map((p) => [p.longitude, p.latitude]),
+          route_distance_m: Math.round(j.distanceM),
+          route_duration_s: Math.round(j.durationS),
+          max_deviation_m: j.maxDeviationM,
+          grace_min: j.graceMin,
+          countdown_s: j.countdownS,
+          watcher_ids: j.watcherIds,
+        })
+      ),
+    endJourney: (id: string, arrived: boolean) => run(db.rpc('end_journey', { j: id, arrived })),
+    rerouteJourney: (id: string, route: LatLng[], distanceM: number, durationS: number) =>
+      run(
+        db.rpc('reroute_journey', {
+          j: id,
+          new_route: route.map((p) => [p.longitude, p.latitude]),
+          distance_m: Math.round(distanceM),
+          duration_s: Math.round(durationS),
+        })
+      ),
+    reportRoadblock: (journeyId: string, coord: LatLng, note: string) =>
+      run(
+        db.from('roadblocks').insert({
+          journey_id: journeyId,
+          user_id: myId,
+          lat: coord.latitude,
+          lng: coord.longitude,
+          note: note.trim() || null,
+        })
+      ),
+
     saveProfile: (name: string, tint: number) =>
       run(db.from('profiles').update({ display_name: name, tint }).eq('id', myId)),
     setPausedAll: (value: boolean) => run(db.from('profiles').update({ sharing_paused: value }).eq('id', myId)),
@@ -310,6 +396,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_locations' }, soon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'zones' }, soon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'guardianships' }, soon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'journeys' }, soon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roadblocks' }, soon)
       .subscribe();
     const interval = setInterval(reload, REFRESH_EVERY_MS);
     const sub = AppState.addEventListener('change', (s) => s === 'active' && reload());
@@ -480,4 +568,9 @@ export function isOffline(locationAt: number | undefined, now = Date.now()): boo
 /** Whose history I can open: my own, and my dependents'. */
 export function canSeeHistory(person: Person | undefined): boolean {
   return iGuard(person);
+}
+
+/** My active journey, if I'm on one. */
+export function myJourney(journeys: Journey[]): Journey | undefined {
+  return journeys.find((j) => j.forId === 'me' && j.status === 'active');
 }

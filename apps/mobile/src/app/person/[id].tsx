@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { BondLine } from '@/components/BondLine';
 import { Avatar, Button, Icon, Row, Screen, Section, T, Toggle, TopBar, confirm, attempt } from '@/components/ui';
+import { callPerson } from '@/lib/call';
 import { distanceMeters, formatDistance } from '@/lib/geo';
 import { canSeeHistory, effectiveShare, firstName, formatAgo, guardsMe, iGuard, isOffline, sharingCircles, useStore } from '@/state/store';
 import { space, useColors } from '@/theme';
@@ -109,6 +110,16 @@ export default function PersonDetail() {
               </T>
             </View>
             <Icon name={person.theyShare ? 'eye' : 'eye-off'} color={person.theyShare ? c.beaconText : c.moss} />
+          </Row>
+        </Section>
+      )}
+
+      {!pending && person.phone && (
+        <Section title="Phone">
+          <Row last onPress={() => callPerson(name, person.phone)}>
+            <Icon name="phone" />
+            <T v="body" style={{ flex: 1 }}>{person.phone}</T>
+            <T v="smallStrong" color={c.beaconText}>Call</T>
           </Row>
         </Section>
       )}

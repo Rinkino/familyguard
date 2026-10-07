@@ -16,7 +16,7 @@ const MOVE_MS = 450;
 type Camera = { center: LatLng; spanM: number };
 
 export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function FamilyMap(
-  { style, initialCenter, initialSpanM = 6000, people = [], zones = [], route, pin, topInset = 0, bottomInset = 0, onLongPress, onPressPerson, onPressZone },
+  { style, initialCenter, initialSpanM = 6000, people = [], zones = [], route, routes = [], markers = [], pin, topInset = 0, bottomInset = 0, onLongPress, onPressPerson, onPressZone },
   ref
 ) {
   const c = useColors();
@@ -127,6 +127,23 @@ export const FamilyMap = forwardRef<FamilyMapHandle, FamilyMapProps>(function Fa
                   fill="none"
                 />
               )}
+              {routes.map((r) =>
+                r.coords.length > 1 ? (
+                  <Polyline
+                    key={r.id}
+                    points={r.coords.map((p) => { const { x, y } = toXY(p); return `${x},${y}`; }).join(' ')}
+                    stroke={r.muted ? withAlpha(c.beaconText, 0.55) : c.beaconText}
+                    strokeWidth={r.muted ? 4 : 6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                ) : null
+              )}
+              {markers.map((m) => {
+                const { x, y } = toXY(m.coord);
+                return <Circle key={m.id} cx={x} cy={y} r={11} fill={m.kind === 'roadblock' ? c.flare : c.ink} stroke="#FFFFFF" strokeWidth={3} />;
+              })}
               {pin && <Circle cx={toXY(pin).x} cy={toXY(pin).y} r={8} fill={c.beacon} stroke="#FFFFFF" strokeWidth={3} />}
             </Svg>
           </Pressable>

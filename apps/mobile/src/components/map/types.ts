@@ -2,6 +2,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { LatLng } from '@/lib/geo';
 
 export type MapPerson = { id: string; name: string; tint: number; coord: LatLng; alert?: boolean; /** Shown faded: no recent location. */ stale?: boolean };
+export type MapMarker = { id: string; coord: LatLng; kind: 'destination' | 'roadblock'; title?: string };
 export type MapZone = { id: string; center: LatLng; radiusM: number; alert?: boolean };
 
 export type FamilyMapProps = {
@@ -12,6 +13,10 @@ export type FamilyMapProps = {
   people?: MapPerson[];
   zones?: MapZone[];
   route?: LatLng[];
+  /** More routes to draw, e.g. journeys you're watching. */
+  routes?: { id: string; coords: LatLng[]; muted?: boolean }[];
+  /** Destinations and user-reported roadblocks. */
+  markers?: MapMarker[];
   pin?: LatLng;
   /** Extra top padding (e.g. under a search bar) when fitting the camera. */
   topInset?: number;
