@@ -9,8 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.familyguard.safety",
-      "usesAppleSignIn": true
+      "bundleIdentifier": "com.familyguard.safety"
     },
     "android": {
       "package": "com.familyguard.safety",
@@ -42,10 +41,8 @@
           }
         }
       ],
-      "expo-secure-store",
       "expo-web-browser",
       "expo-font",
-      "@react-native-google-signin/google-signin",
       [
         "expo-audio",
         {
